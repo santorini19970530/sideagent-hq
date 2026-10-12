@@ -117,6 +117,7 @@ docs/
 - Runner long-poll: `GET /v1/runner/next?types=...&wait=...` holds up to 30 seconds (`wait`, in seconds) and returns the oldest claimable job or `204`. The runner then claims it; a `409` means another runner won.
 - Claims expire lazily (D21): no timer runs; an expired claim reads as `open` and is written back on the next claim or status call.
 - Errors are always `{ code, reason, fix_hint }` from `protocol/src/errors.ts`.
+- `same_owner=true` on `GET /v1/runner/next` and `POST /v1/jobs/:id/claim` limits a runner to jobs posted by its own owner; a claim on another owner's job returns `forbidden`. The dev command executor always sends it (D18). HQ enforces it because runners never learn who posted a job.
 
 ### Pipeline
 

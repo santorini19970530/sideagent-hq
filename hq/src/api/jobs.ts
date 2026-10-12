@@ -18,10 +18,19 @@ const ListQuery = z.object({
   min_reward: z.coerce.number().int().nonnegative().optional(),
 });
 
+// Opt-in filter for the dev command executor (D18): only jobs posted by the caller's owner.
+const sameOwnerFlag = z
+  .enum(["true", "false"])
+  .optional()
+  .transform((s) => s === "true");
+
 const NextQuery = z.object({
   types: typesCsv,
+  same_owner: sameOwnerFlag,
   wait: z.coerce.number().int().min(0).max(MAX_WAIT_SECONDS).default(MAX_WAIT_SECONDS),
 });
+
+const ClaimQuery = z.object({ same_owner: sameOwnerFlag });
 
 async function readJson(req: Request): Promise<unknown> {
   try {
@@ -42,9 +51,10 @@ export function jobRoutes(jobs: JobService) {
       return c.json(await jobs.listJobs(parseInput(ListQuery, c.req.query())));
     })
     .get("/jobs/:id", async (c) => c.json(await jobs.getStatus(c.var.agent, c.req.param("id"))))
-    .post("/jobs/:id/claim", async (c) =>
-      c.json(await jobs.claimJob(c.var.agent, c.req.param("id"))),
-    )
+    .post("/jobs/:id/claim", async (c) => {
+      const { same_owner } = parseInput(ClaimQuery, c.req.query());
+      return c.json(await jobs.claimJob(c.var.agent, c.req.param("id"), { sameOwner: same_owner }));
+    })
     .post("/jobs/:id/submissions", async (c) => {
       const body = await readJson(c.req.raw);
       const input = parseInput(SubmitResultInput, {
@@ -54,8 +64,13 @@ export function jobRoutes(jobs: JobService) {
       return c.json(await jobs.submitResult(c.var.agent, input));
     })
     .get("/runner/next", async (c) => {
-      const { types, wait } = parseInput(NextQuery, c.req.query());
-      const job = await jobs.nextJob(c.var.agent, types, wait * 1000, c.req.raw.signal);
+      const { types, wait, same_owner } = parseInput(NextQuery, c.req.query());
+      const job = await jobs.nextJob(
+        c.var.agent,
+        { types, sameOwner: same_owner },
+        wait * 1000,
+        c.req.raw.signal,
+      );
       return job ? c.json(job) : c.body(null, 204);
     });
 }

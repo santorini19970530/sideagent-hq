@@ -214,4 +214,25 @@ describe("runner long-poll", () => {
     const res = await h.call(keys.runner, "GET", "/v1/runner/next?types=eval.run&wait=0");
     expect(res.status).toBe(204);
   });
+
+  it("with same_owner, skips jobs from other owners", async () => {
+    const { jobId } = await postedJob();
+    const keys = await h.agents();
+    const res = await h.call(keys.runner, "GET", "/v1/runner/next?same_owner=true&wait=0");
+    expect(res.status).toBe(204);
+
+    const claim = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim?same_owner=true`);
+    expect(claim.status).toBe(403);
+    expect(ApiError.parse(claim.body).code).toBe("forbidden");
+  });
+
+  it("with same_owner, returns and claims the owner's own job", async () => {
+    const { keys, jobId } = await postedJob();
+    const next = await h.call(keys.runner, "GET", "/v1/runner/next?same_owner=true&wait=0");
+    expect(JobSummary.parse(next.body).job_id).toBe(jobId);
+
+    const claim = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim?same_owner=true`);
+    expect(claim.status).toBe(200);
+    ClaimJobOutput.parse(claim.body);
+  });
 });
