@@ -1,6 +1,6 @@
 # Sideagent design
 
-System design for the Sideagent prototype. The pitch is in [`proposal.md`](proposal.md); settled decisions and their reasons are in [`decisions.md`](decisions.md).
+Product and system design for Sideagent: job lifecycle, trust layer, interfaces and threat model. The pitch is in [`proposal.md`](proposal.md); how it is built is in [`technical.md`](technical.md); settled decisions and their reasons are in [`decisions.md`](decisions.md).
 
 Status markers used below:
 - **Decided:** agreed; change only with a new entry in `decisions.md`.
@@ -103,7 +103,8 @@ Rules:
 **Proposed.**
 
 - The field CLI runs each job in a container with no host credentials, an empty home directory, and restricted network (allowlist per job type; `research.public` gets web access, `code.implement` gets none).
-- Logs stream live to HQ as OpenTelemetry GenAI spans, signed with the runner's key and timestamped by HQ on receipt.
+- Logs stream to HQ and are timestamped on receipt. After the demo: OpenTelemetry GenAI spans signed with the runner's key.
+- House runners on Cloud Run use their container as the sandbox (see `technical.md`).
 
 ### 5. Result checking (HQ side)
 
@@ -179,46 +180,18 @@ cancel_job(job_id)
 - Errors: `{code, reason, fix_hint}`, for example `{code: "spec_not_checkable", reason: "No acceptance criteria and no tests", fix_hint: "Add hidden_tests or set needs_platform_tests=true"}`.
 
 ### Identity and owner linking
-- An agent self-registers and receives a limited, sandboxed identity with no credits.
-- The owner links it with the OAuth 2.0 Device Authorization Grant (RFC 8628): "go to /link and enter ABCD-1234".
-- Each agent has an Ed25519 key pair; submissions and log batches are signed.
+- **Prototype:** the owner signs in with Firebase Auth and creates a per-agent API key in the dashboard.
+- **After the demo:** an agent self-registers and receives a limited, sandboxed identity with no credits. The owner links it with the OAuth 2.0 Device Authorization Grant (RFC 8628): "go to /link and enter ABCD-1234".
+- After the demo: each agent has an Ed25519 key pair; submissions and log batches are signed.
 - Owner policies: budget caps, allowed job types, approval required above N credits, kill switch.
 
 ## Architecture
 
-**Proposed.**
-
-| Component | Service | Responsibility |
-|---|---|---|
-| Mission API | Cloud Run | REST + A2A server + MCP server; job lifecycle |
-| Platform agents | Cloud Run (same or separate service) | Screening, redaction, test review, result screening, judging |
-| Test sandbox | Cloud Run Jobs | Runs hidden tests and mutation testing in isolation |
-| State | Firestore | Jobs, ledger, agents, reputation |
-| Placeholder vault | Firestore + Cloud KMS | Encrypted redaction maps |
-| Auth and dashboard | Firebase Auth + Firebase Hosting | Owner sign-in, device linking, mission control |
-| Redaction | Sensitive Data Protection | De-identify and re-identify |
-| Models | Gemini API (Flash, Pro); Gemma | Platform agents; runner default model |
-| Field CLI | Local binary/package | Claim, sandbox, run with Gemma, stream signed logs |
-
-### Data model sketch (Firestore)
-
-```
-agents/{agentId}         ownerId, publicKey, declaredModels[], status, createdAt
-owners/{ownerId}         policies {budgetCap, allowedTypes[], approvalThreshold}, killSwitch
-jobs/{jobId}             posterAgentId, type, state, specRef, publicTests, budget, deadline,
-                         testStrength, screening {verdict, categories, confidence},
-                         claim {runnerAgentId, claimedAt, deadline, attemptsLeft}
-jobs/{jobId}/private     hiddenTestsRef, referenceSolutionRef, trapChecksRef   (HQ-only)
-jobs/{jobId}/submissions/{id}  resultRef, testSummary {passed, total, categories}, screening
-jobs/{jobId}/events/{id} state transitions and signed log batches
-ledger/{entryId}         debit, credit, amount, jobId, reason, createdAt   (append-only)
-reputation/{agentId_type} score, trapsPassed, trapsFailed, jobsPassed, disputes
-vault/{jobId}            encrypted placeholder map   (poster-side access only)
-```
+Stack, repo layout, components, cloud resources, data model and development setup are in [`technical.md`](technical.md).
 
 ## Observability
 
-**Proposed.**
+**Proposed, after the demo.** The prototype records events in Firestore for the dashboard.
 
 - Runner logs and HQ processing use OpenTelemetry GenAI semantic conventions (agent span → model calls → tool spans). Pin the convention version; it is still marked Development.
 - W3C Trace Context links the poster's call, HQ processing and the runner's run into one trace.
@@ -263,26 +236,9 @@ New contribution: a `sideagent/verified-delegation` A2A extension covering hidde
 
 ## Prototype scope
 
-Must have for the demo:
-- Post, claim, submit, check, release over MCP (A2A if time allows).
-- Briefing screening and result screening with Gemini.
-- Redaction with Sensitive Data Protection.
-- Hidden tests run in Cloud Run Jobs; trap check that catches a fake result.
-- Credit ledger with escrow and stake.
-- Field CLI running Gemma.
-- Mission control with the live job graph and screening feed.
-
-Should have: mutation-test strength score, platform-written tests, double-run judge, device-code linking.
-
-Later: model monitoring dashboard, per-skill reputation UI, shared result cache, low-carbon scheduling, dispute panel, private boards, real-money settlement.
+The demo must-haves, stretch goals, roadmap cuts and the 5-day plan are in [`technical.md`](technical.md#5-day-plan).
 
 ## Open questions
 
-1. Implementation language and framework for HQ and the field CLI (TypeScript vs Python; Google ADK for platform agents?).
-2. A2A first or MCP first for the prototype?
-3. Starting credit grant for new owners, default stake size, fee amounts.
-4. How runners get a stake on day one (starter grant, or must run trap jobs first).
-5. Sandbox technology for the field CLI (Docker, gVisor, or something lighter).
-6. Which Gemma size is the default runner model, and minimum hardware.
-7. Exact A2A Agent Card path and task state names in the current spec; MCP Tasks method names.
-8. Whether the model-monitoring dashboard is in the demo or on the roadmap slide.
+1. Starting credit grant for new owners, default stake size, fee amounts.
+2. How runners get a stake on day one (starter grant, or must run trap jobs first).

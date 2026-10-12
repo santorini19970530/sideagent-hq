@@ -6,16 +6,17 @@ Instructions for AI coding agents working on Sideagent.
 
 Before starting any task, read:
 
-1. [`docs/design.md`](docs/design.md) for the architecture, mission lifecycle, trust layer and interfaces.
-2. [`docs/decisions.md`](docs/decisions.md) for settled decisions. Do not reopen them unless the user asks. If a task seems to conflict with a decision, stop and ask.
-3. [`docs/proposal.md`](docs/proposal.md) when the task touches the pitch, demo, dashboard copy or anything a hackathon judge will see.
+1. [`docs/design.md`](docs/design.md) for the mission lifecycle, trust layer, interfaces and threat model.
+2. [`docs/technical.md`](docs/technical.md) for the stack, repo layout, components, cloud resources, configuration, development setup and the 5-day plan.
+3. [`docs/decisions.md`](docs/decisions.md) for settled decisions. Do not reopen them unless the user asks. If a task seems to conflict with a decision, stop and ask.
+4. [`docs/proposal.md`](docs/proposal.md) when the task touches the pitch, demo, dashboard copy or anything a hackathon judge will see.
 
 ## Project context
 
 - Sideagent is a hackathon project for the Gen AI Academy APAC AI Builder Cup.
 - **Hard requirements:** the solution must use Google AI models (Gemini or Gemma) and be deployed on Google Cloud via Cloud Run or Firebase. Everything must be in English.
 - Judging weights: technical merit and Gen AI use 40%, problem alignment and impact 25%, innovation 25%, user experience 10%.
-- The deliverable is a working prototype plus a 3-minute demo video. Favor what makes the demo flow in `docs/proposal.md` work end to end over breadth.
+- The deliverable is a working prototype plus a 3-minute demo video, built in 5 days by 2 people. The must-have list in `docs/technical.md` is the contract; favor making the demo flow work end to end over breadth.
 
 ## Naming rules
 
@@ -36,10 +37,19 @@ These follow from the product's core promise. Treat violations as bugs.
 - **No private data in logs or public pages.** Redacted values are restored only on the poster's side.
 - Do not build features that resell consumer AI subscriptions (Claude, ChatGPT or Gemini consumer plans). See `docs/decisions.md`.
 
+## Stack and commands
+
+- TypeScript everywhere (pnpm workspace): `protocol/`, `hq/`, `field/`, `control/`. The only non-TypeScript code is the check script inside sandbox images.
+- `pnpm install`, then `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`. Run typecheck and lint before committing.
+- Local development uses the Firebase emulators, `PIPELINE_MODE=inline` and `SANDBOX_MODE=docker` (see `docs/technical.md`).
+- Schemas live in `protocol/` (Zod) and are the single source for validation, MCP tools and Gemini output. Don't redefine types elsewhere.
+- Model IDs come from configuration, never hardcoded.
+- Code jobs carry a required `runtime`; only `python` is implemented. Keep runtime-specific logic inside `hq/src/runtimes/`.
+
 ## Working conventions
 
 - Keep the API agent-friendly: typed JSON Schemas, idempotency keys on writes, async job IDs instead of blocking calls, and errors shaped as `{code, reason, fix_hint}`.
 - Reuse standards before inventing (A2A, MCP, OpenTelemetry GenAI conventions, RFC 8628). See "Standards" in `docs/design.md`.
-- When implementation changes the design, update `docs/design.md` in the same change. Record new decisions in `docs/decisions.md` with the reason.
+- When implementation changes the design or the technical plan, update `docs/design.md` or `docs/technical.md` in the same change. Record new decisions in `docs/decisions.md` with the reason.
 - Stage explicit paths when committing; never `git add -A`. Follow the commit style already in `git log`.
-- Open questions are listed at the end of `docs/design.md`. Do not silently pick an answer for one; ask, or note the assumption in the doc.
+- Open questions are listed at the end of `docs/design.md` and `docs/technical.md`. Do not silently pick an answer for one; ask, or note the assumption in the doc.

@@ -81,3 +81,37 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Decision:** Lead with benchmark and regression monitoring as the first public use case.
 
 **Why:** Existing demand (model "nerf" debates), no private data, public results double as SEO, and benchmark items double as trap checks.
+
+## D13. TypeScript everywhere (2026-10-13)
+
+**Decision:** HQ, field CLI, dashboard and shared schemas are TypeScript in one pnpm workspace. Zod schemas in `protocol/` are the single source for validation, MCP tool schemas, Gemini output schemas and JSON Schema.
+
+**Why:** One language for a 2-person, 5-day build. The MCP TypeScript SDK is the reference implementation, A2A has an official JS SDK, and `@google/genai` covers Gemini and Vertex AI.
+
+**Rejected:** Python (stronger ADK support, but platform agents are mostly single typed calls and don't need it).
+
+## D14. MCP first, A2A later (2026-10-13)
+
+**Decision:** The prototype exposes MCP tools only. A2A comes after the demo. Job states still follow the A2A Task model, so the A2A adapter is thin.
+
+**Why:** Gemini CLI connects to MCP servers natively, which is what the demo shows.
+
+## D15. Python jobs first, JS later (2026-10-13)
+
+**Decision:** Code jobs support `runtime: "python"` (pytest, mutmut) in the prototype. `runtime` is a required field, and sandbox images, test parsing and mutation tooling sit behind a per-runtime adapter, so `"node"` can be added without schema changes.
+
+**Why:** Each runtime needs its own sandbox image, test runner and mutation tool. Small models write Python most reliably.
+
+## D16. Scope for a 5-day, 2-person build (2026-10-13)
+
+**Decision:** Demo must-haves and the day plan are in `technical.md` under "5-day plan". A2A, device linking, signed logs, OpenTelemetry, JS jobs and the model-monitoring dashboard go on the roadmap slide. Owners create per-agent API keys in the dashboard instead of device linking.
+
+**Why:** The demo flow must work end to end on day 5; everything else is secondary.
+
+## D17. House runners on Cloud Run CPU with managed Gemma on Vertex AI (2026-10-13)
+
+**Decision:** House runners are the field CLI deployed on Cloud Run (CPU), calling managed Gemma on Vertex AI (`gemma-4-26b-a4b-it-maas`, `global` location; Experimental as of 2026-10-13). Each has its own service account with only Vertex AI User. The Gemini API with an API key is a config fallback (`SIDEAGENT_MODEL_BACKEND=gemini-api`).
+
+**Why:** No GPU quota wait. Service-account auth means no API key in the container, so a compromised runner holds nothing reusable. Job content stays in the GCP project under enterprise data terms, and HQ already uses Vertex AI.
+
+**Rejected:** Cloud Run GPU with local Gemma (GPU quota risk in a 5-day build; Docker can't run inside Cloud Run anyway). Gemini API as the primary backend (API key in the container; free-tier data terms).

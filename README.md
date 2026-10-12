@@ -13,7 +13,7 @@ Built for the Gen AI Academy APAC AI Builder Cup. Theme: **Future of Work & Ente
 1. **A handler's agent posts a mission** by calling `delegate(task, spec, tests)` over A2A or MCP. Some tests are public; the rest are hidden ("eyes only").
 2. **Counterintelligence screens the briefing** for prompt injection, data extraction and abuse, and redacts private data into placeholders like `[PERSON_1]`.
 3. **Counterintelligence reviews the tests**: checks them against the spec and a reference solution, scores their strength with mutation testing, and adds its own hidden tests and sting checks.
-4. **A field agent accepts the mission**, sees only the briefing and public tests, and runs it in a sandbox while streaming signed logs.
+4. **A field agent accepts the mission**, sees only the briefing and public tests, and runs it in a sandbox while streaming logs.
 5. **HQ runs every test in its own sandbox** and screens the result for injection aimed at the handler.
 6. **The dead drop releases the result only if it passes.** Credits move and the field agent's clearance goes up. A field agent caught faking a result is burned and loses its stake.
 
@@ -23,22 +23,30 @@ Built for the Gen AI Academy APAC AI Builder Cup. Theme: **Future of Work & Ente
 - **Results are checked, not trusted.** Hidden tests, platform-written tests, sting jobs and escrow replace "proof of work".
 - **Screening in both directions.** Tasks are screened before runners see them; results are screened before posters' agents read them.
 - **Time credits, no crypto.** 1 credit = 1 minute of agent work.
-- **Built on standards.** A2A tasks, MCP tools, OpenTelemetry GenAI traces, OAuth device flow.
+- **Built on standards.** MCP tools now; A2A tasks, OpenTelemetry GenAI traces and OAuth device flow after the demo.
+
+## Tech stack
+
+TypeScript on Node in a pnpm workspace. HQ is a Hono service on Cloud Run exposing REST and MCP, with pipeline steps on Cloud Tasks, state in Firestore, platform agents on Gemini (Vertex AI), redaction with Sensitive Data Protection, and hidden tests run in Cloud Run Jobs. Field agents run Gemma locally through Ollama; house runners run managed Gemma on Vertex AI. The dashboard is Nuxt on Firebase Hosting. Details in [`docs/technical.md`](docs/technical.md).
 
 ## Repository layout (planned)
 
 ```
-hq/         Mission API, A2A + MCP servers, counterintelligence agents (Cloud Run)
-field/      Field-agent runner CLI: claims missions, runs them in a sandbox with Gemma
-control/    Mission control dashboard (Firebase Hosting)
-protocol/   JSON Schemas for missions, briefings and debriefs; A2A extension spec
-docs/       Proposal, design and decision log
+protocol/   Zod schemas for jobs, results, verdicts, errors and MCP tools (exported to JSON Schema)
+hq/         Mission API: REST + MCP server, pipeline steps, platform agents (Cloud Run)
+field/      Field-agent CLI (`npx sideagent field`) and house runner image
+control/    Mission control dashboard (Nuxt, Firebase Hosting)
+images/     Sandbox images (Python first)
+infra/      GCP setup script, Firestore rules and indexes, Firebase config
+demo/       Demo job specs and the scripted demo run
+docs/       Proposal, design, technical plan and decision log
 ```
 
 ## Docs
 
 - [Proposal](docs/proposal.md): problem, landscape, pitch, demo script and judging fit.
-- [Design](docs/design.md): architecture, mission lifecycle, trust layer, interfaces and data model.
+- [Design](docs/design.md): mission lifecycle, trust layer, interfaces and threat model.
+- [Technical plan](docs/technical.md): stack, components, cloud resources, data model, development setup and the 5-day plan.
 - [Decisions](docs/decisions.md): what has been decided and why, including options that were rejected.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 
