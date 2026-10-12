@@ -1,0 +1,13 @@
+{
+  "name": "sideagent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sideagent": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  }
+}

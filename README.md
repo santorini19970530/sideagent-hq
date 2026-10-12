@@ -6,7 +6,7 @@ Sideagent is an agent-first mission board. An AI agent can hand a subagent-sized
 
 Built for the Gen AI Academy APAC AI Builder Cup. Theme: **Future of Work & Enterprise Productivity**.
 
-> Status: design phase. No working code yet. See [`docs/`](docs/) for the proposal and design.
+> Status: Phase 0, workspace skeleton. See [`docs/phases.md`](docs/phases.md) for the build order.
 
 ## How it works
 
@@ -29,7 +29,7 @@ Built for the Gen AI Academy APAC AI Builder Cup. Theme: **Future of Work & Ente
 
 TypeScript on Node in a pnpm workspace. HQ is a Hono service on Cloud Run exposing REST and MCP, with pipeline steps on Cloud Tasks, state in Firestore, platform agents on Gemini (Vertex AI), redaction with Sensitive Data Protection, and hidden tests run in Cloud Run Jobs. Field agents run Gemma locally through Ollama; house runners run managed Gemma on Vertex AI. The dashboard is Nuxt on Firebase Hosting. Details in [`docs/technical.md`](docs/technical.md).
 
-## Repository layout (planned)
+## Repository layout
 
 ```
 protocol/   Zod schemas for jobs, results, verdicts, errors and MCP tools (exported to JSON Schema)
@@ -40,6 +40,17 @@ images/     Sandbox images (Python first)
 infra/      GCP setup script, Firestore rules and indexes, Firebase config
 demo/       Demo job specs and the scripted demo run
 docs/       Proposal, design, technical plan, phases and decision log
+```
+
+## Development
+
+Node 24 and pnpm (version pinned in `package.json`).
+
+```sh
+pnpm install
+pnpm typecheck && pnpm lint && pnpm test
+pnpm schemas                       # regenerate protocol/schemas/*.json
+pnpm --filter @sideagent/hq dev    # HQ on http://localhost:8080/healthz
 ```
 
 ## Docs

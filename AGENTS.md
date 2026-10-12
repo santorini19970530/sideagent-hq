@@ -41,7 +41,7 @@ These follow from the product's core promise. Treat violations as bugs.
 ## Stack and commands
 
 - TypeScript everywhere (pnpm workspace): `protocol/`, `hq/`, `field/`, `control/`. The only non-TypeScript code is the check script inside sandbox images.
-- `pnpm install`, then `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`. Run typecheck and lint before committing.
+- `pnpm install`, then `pnpm typecheck`, `pnpm lint`, `pnpm test`. Run `pnpm schemas` after changing `protocol/` schemas and commit the JSON. Run typecheck and lint before committing.
 - Local first: every cloud dependency goes behind an adapter with a local default (see "Cloud adapters" in `docs/technical.md`). Don't call GCP services other than model APIs before Phase 7.
 - No always-on cloud resources (minimum instances, Cloud NAT, VPC connectors, load balancers). Everything must scale to zero (D20).
 - Schemas live in `protocol/` (Zod) and are the single source for validation, MCP tools and Gemini output. Don't redefine types elsewhere.

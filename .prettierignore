@@ -1,0 +1,4 @@
+pnpm-lock.yaml
+protocol/schemas/
+.data/
+*.md

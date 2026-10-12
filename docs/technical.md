@@ -232,11 +232,13 @@ HQ:
 
 | Variable | Meaning |
 |---|---|
+| `PORT` | HTTP port (default `8080`) |
 | `GCP_PROJECT`, `GCP_REGION` | Project and region |
 | `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
 | `KMS_KEY` | Vault key resource name |
 | `BLOB_BACKEND`, `VAULT_BACKEND`, `REDACTOR_BACKEND` | `local` / `gcs`, `local` / `kms`, `pattern` / `dlp` |
+| `BLOB_LOCAL_DIR` | Folder for `BLOB_BACKEND=local` (default `.data/blobs`) |
 | `PIPELINE_MODE`, `SANDBOX_MODE` | `inline` / `cloud-tasks`, `docker` / `cloud-run-job` |
 | `HOUSE_RUNNERS`, `HOUSE_RUNNER_DOUBLE_AGENT` | `off` / `local` / `cloud-run-job`; dispatch the double agent too |
 | `LIMIT_POSTS_PER_HOUR`, `LIMIT_CHECKS_PER_JOB`, `LIMIT_MUTANTS` | Caps on paid work per agent and per job |
@@ -254,7 +256,9 @@ Field CLI:
 
 ## Local development
 
-- `pnpm install` at the root; `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`.
+- `pnpm install` at the root; `pnpm typecheck`, `pnpm lint`, `pnpm test`. `pnpm schemas` regenerates `protocol/schemas/*.json`; CI fails if the committed files are stale.
+- No build step until Phase 7: packages export their TypeScript sources and HQ runs through `tsx` (`pnpm --filter @sideagent/hq dev`). Bundling for the Docker image comes with the deploy.
+- JSON Schemas come from Zod 4's built-in `z.toJSONSchema()`. API-facing fields (REST, MCP, JSON Schema) are snake_case, matching the MCP tool signatures in `design.md`; Firestore documents are camelCase.
 - Firebase emulators for Firestore and Auth (`firebase emulators:start`).
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
 - The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.

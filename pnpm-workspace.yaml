@@ -1,0 +1,6 @@
+packages:
+  - protocol
+  - hq
+  - field
+allowBuilds:
+  esbuild: true
