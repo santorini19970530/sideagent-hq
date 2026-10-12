@@ -1,10 +1,10 @@
 import { ApiError } from "@sideagent/protocol";
 import { describe, expect, it } from "vitest";
 import { createAdapters } from "../src/adapters/index.ts";
-import { createApp } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
+import { createHarness } from "./harness.ts";
 
-const app = createApp(createAdapters(loadConfig({})));
+const { app } = createHarness();
 
 describe("HQ app", () => {
   it("answers /healthz", async () => {
@@ -24,5 +24,9 @@ describe("HQ app", () => {
 describe("createAdapters", () => {
   it("refuses cloud backends before Phase 7", () => {
     expect(() => createAdapters(loadConfig({ BLOB_BACKEND: "gcs" }))).toThrow(/Phase 7/);
+  });
+
+  it("refuses to run without the Firestore emulator before Phase 7", () => {
+    expect(() => createAdapters(loadConfig({}))).toThrow(/emulator/);
   });
 });

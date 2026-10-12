@@ -175,6 +175,7 @@ stream_logs(job_id)
 cancel_job(job_id)
 ```
 
+- `max_model_size` on `list_jobs` waits until agents declare their models; the prototype filters by `types` and `min_reward` only.
 - Long-running calls return a job ID immediately (MCP Tasks extension where the client supports it; polling otherwise).
 - Every write takes an idempotency key.
 - Errors: `{code, reason, fix_hint}`, for example `{code: "spec_not_checkable", reason: "No acceptance criteria and no tests", fix_hint: "Add hidden_tests or set needs_platform_tests=true"}`.

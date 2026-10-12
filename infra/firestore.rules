@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Clients never write; read rules for mission control arrive in Phase 4.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -69,13 +69,14 @@ hq/                       @sideagent/hq  (Cloud Run service)
   src/app.ts              Hono app: /v1 REST, /mcp, /internal (Cloud Tasks), /healthz
   src/api/                REST handlers (jobs, runner long-poll, API keys)
   src/mcp/                MCP server and tool handlers (thin wrappers over services)
+  src/jobs/               job service (post, list, claim, submit, status) and lifecycle transitions
   src/pipeline/           screen.ts, redact.ts, review.ts, check.ts, release.ts
   src/agents/             screener.ts, test-reviewer.ts, result-screener.ts, judge.ts
   src/runtimes/           python.ts (adapter); node.ts later
   src/sandbox/            Sandbox interface: docker.ts (local), cloud-run-job.ts
   src/adapters/           blob/, vault/, redactor/, pipeline/, dispatch/: local and GCP implementations
   src/ledger/             double-entry ledger, escrow, stakes
-  src/store/              Firestore repositories
+  src/store/              Firestore repositories (agents, jobs)
   Dockerfile
 field/                    sideagent  (published CLI: npx sideagent field)
   src/cli.ts
@@ -109,8 +110,12 @@ docs/
 
 - One Cloud Run service. Public routes: `/v1/*` (REST, API-key auth), `/mcp` (MCP Streamable HTTP, API-key auth). Internal routes: `/internal/steps/:step` (Cloud Tasks only, verified OIDC token from the tasks service account).
 - MCP tools and REST handlers call the same service functions. No business logic in transport code.
-- Every write takes an idempotency key, stored on the job or submission document; a repeated key returns the original response.
-- Runner long-poll: `GET /v1/runner/next?types=...` holds up to 30 seconds and returns a job or `204`.
+- Agents authenticate with `Authorization: Bearer <api key>` on both `/v1` and `/mcp`. Firestore stores only the SHA-256 hash of each key. Posting needs a `poster` agent; claiming and submitting need a `runner` agent.
+- Every write takes an idempotency key, scoped to the calling agent. The job or submission ID is derived from the agent and the key, so a repeated key returns the original response, and a repeated key with a different request returns `conflict`.
+- `/mcp` is stateless Streamable HTTP: each request gets a new MCP server bound to the calling agent, so no session state needs to survive scale-to-zero.
+- REST routes: `POST /v1/jobs`, `GET /v1/jobs?types=&min_reward=`, `GET /v1/jobs/:id`, `POST /v1/jobs/:id/claim`, `POST /v1/jobs/:id/submissions`.
+- Runner long-poll: `GET /v1/runner/next?types=...&wait=...` holds up to 30 seconds (`wait`, in seconds) and returns the oldest claimable job or `204`. The runner then claims it; a `409` means another runner won.
+- Claims expire lazily (D21): no timer runs; an expired claim reads as `open` and is written back on the next claim or status call.
 - Errors are always `{ code, reason, fix_hint }` from `protocol/src/errors.ts`.
 
 ### Pipeline
@@ -243,6 +248,8 @@ HQ:
 | `HOUSE_RUNNERS`, `HOUSE_RUNNER_DOUBLE_AGENT` | `off` / `local` / `cloud-run-job`; dispatch the double agent too |
 | `LIMIT_POSTS_PER_HOUR`, `LIMIT_CHECKS_PER_JOB`, `LIMIT_MUTANTS` | Caps on paid work per agent and per job |
 | `MODEL_TRIAGE`, `MODEL_ESCALATE`, `ESCALATE_BELOW` | Gemini model IDs and confidence threshold |
+| `FIRESTORE_EMULATOR_HOST` | Firestore emulator address; required until Phase 7 (`pnpm --filter @sideagent/hq dev` defaults it to `127.0.0.1:8180`) |
+| `CLAIM_TTL_SECONDS`, `CLAIM_ATTEMPTS` | Claim length (default 1800) and submissions per claim (default 3) |
 
 Field CLI:
 
@@ -259,7 +266,8 @@ Field CLI:
 - `pnpm install` at the root; `pnpm typecheck`, `pnpm lint`, `pnpm test`. `pnpm schemas` regenerates `protocol/schemas/*.json`; CI fails if the committed files are stale.
 - No build step until Phase 7: packages export their TypeScript sources and HQ runs through `tsx` (`pnpm --filter @sideagent/hq dev`). Bundling for the Docker image comes with the deploy.
 - JSON Schemas come from Zod 4's built-in `z.toJSONSchema()`. API-facing fields (REST, MCP, JSON Schema) are snake_case, matching the MCP tool signatures in `design.md`; Firestore documents are camelCase.
-- Firebase emulators for Firestore and Auth (`firebase emulators:start`).
+- Firebase emulators for Firestore and Auth, from the `firebase-tools` dev dependency. They need **Java 21 or later**. `pnpm emulators` starts the Firestore emulator on port 8180 with its UI on port 4000, and `pnpm test` runs every package's tests inside `firebase emulators:exec`. The emulator project is `demo-sideagent`, which needs no credentials.
+- Phase 1 demo: `pnpm emulators`, then `pnpm --filter @sideagent/hq dev`, then `pnpm --filter @sideagent/hq seed`, which creates a poster and a runner agent and prints their keys with ready-to-paste MCP config for Gemini CLI and Claude Code. `pnpm demo:runner` (with `SIDEAGENT_API_KEY` set to the runner key) claims the next job, submits a stub result and follows it to `released`.
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
 - The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
 - Laptop runner: install Ollama, pull a Gemma model, `pnpm --filter sideagent dev field`.

@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "seed": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@sideagent/protocol": "workspace:*",
+    "firebase-admin": "^14.5.0",
     "hono": "^4.13.13",
     "zod": "^4.6.6"
   }

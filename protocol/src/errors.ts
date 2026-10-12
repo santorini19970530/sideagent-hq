@@ -4,6 +4,7 @@ export const ErrorCode = z.enum([
   "invalid_request",
   "not_found",
   "unauthorized",
+  "forbidden",
   "conflict",
   "invalid_state",
   "spec_not_checkable",

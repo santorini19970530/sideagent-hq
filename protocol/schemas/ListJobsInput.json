@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "types": {
+      "description": "Only return jobs of these types",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "code.implement",
+          "code.test",
+          "data.extract",
+          "data.label",
+          "research.public",
+          "translate",
+          "eval.run"
+        ]
+      }
+    },
+    "min_reward": {
+      "description": "Minimum budget in credits",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  }
+}

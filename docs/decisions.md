@@ -146,3 +146,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** Two always-on house runners would cost about $100/month while idle; everything else is free or pennies at our volume. Target is under about $1/month idle.
 
 **Trade-off:** Each house-runner run has a cold start of tens of seconds. Jobs are asynchronous, and the dashboard shows it as "field agent dispatched".
+
+## D21. Lazy claim timeout (2026-10-13)
+
+**Decision:** No timer or scheduled task expires claims. A `claimed` or `running` job whose claim deadline has passed reads as `open` on the board, and the next claim or status call on that job writes `claimed → open` with a "Claim timed out" event in the same transaction.
+
+**Why:** Nothing has to run while the system is idle (D20), and there is no extra Cloud Tasks scheduling to build or test. A late submission from the old runner is refused because its claim is gone.
+
+**Trade-off:** The job document stays `claimed` in Firestore until something touches it, so mission control may show a stale state for a timed-out claim. Stake slashing on timeout arrives with the ledger in Phase 3 and hooks into the same transition.
