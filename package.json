@@ -12,6 +12,7 @@
     "test": "firebase emulators:exec --config infra/firebase.json --project demo-sideagent --only firestore 'pnpm -r test'",
     "emulators": "firebase emulators:start --config infra/firebase.json --project demo-sideagent --only firestore",
     "demo:runner": "tsx demo/claim-and-submit.ts",
+    "field": "tsx field/src/cli.ts field",
     "format": "prettier --write .",
     "schemas": "pnpm --filter @sideagent/protocol export"
   },
