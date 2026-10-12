@@ -154,3 +154,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** Nothing has to run while the system is idle (D20), and there is no extra Cloud Tasks scheduling to build or test. A late submission from the old runner is refused because its claim is gone.
 
 **Trade-off:** The job document stays `claimed` in Firestore until something touches it, so mission control may show a stale state for a timed-out claim. Stake slashing on timeout arrives with the ledger in Phase 3 and hooks into the same transition.
+
+## D22. Python jobs use the standard library and pytest only (2026-10-13)
+
+**Decision:** The `python-sandbox` image contains Python 3.13 and hash-pinned pytest, nothing else. Solutions and tests can import only the standard library and pytest.
+
+**Why:** A small image builds and cold-starts fast, and every package in it is code that runs next to untrusted results. Choosing which third-party packages to allow is a policy question the prototype doesn't need.
+
+**Trade-off:** Jobs that need numpy, pandas or similar can't be posted yet. A per-job package list (installed from a vetted mirror before the network is cut) is a roadmap item.

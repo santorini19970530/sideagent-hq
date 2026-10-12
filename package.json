@@ -13,6 +13,7 @@
     "emulators": "firebase emulators:start --config infra/firebase.json --project demo-sideagent --only firestore",
     "demo:runner": "tsx demo/claim-and-submit.ts",
     "field": "tsx field/src/cli.ts field",
+    "sandbox:build": "docker build -t sideagent-sandbox-python:dev images/python-sandbox",
     "format": "prettier --write .",
     "schemas": "pnpm --filter @sideagent/protocol export"
   },

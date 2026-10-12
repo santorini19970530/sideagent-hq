@@ -163,6 +163,12 @@ Behind the `Redactor` interface: a pattern matcher (emails, phone numbers, card 
 - **Output:** `run_checks.py` writes `summary.json` (`passed`, `total`, per-category counts, mutation score when requested) to a mounted output bucket. Only HQ reads it.
 - **Isolation:** dedicated service account with only object read on the input bucket and object write on the output bucket. Direct VPC egress (all traffic) to a subnet with no Cloud NAT, so no internet. Timeouts per check; capped number of mutants.
 - **Known gap:** with Private Google Access, code in the sandbox could reach Google APIs using the sandbox service account. A VPC Service Controls perimeter closes this; it is on the roadmap, not in the prototype.
+- **One image, two commands.** `images/python-sandbox` (Python 3.13, hash-pinned pytest, uid 10001) serves HQ checks and laptop runners. Jobs can use the standard library and pytest only (D22).
+  - `check` (HQ): reads the result from `/job/result/` and each test category from `/job/tests/<category>/` (`public`, `hidden`, `trap`; any directory name works), plus an optional `/job/config.json` with `timeout_seconds` per category. Writes counts only, as `TestSummary`, to `/out/summary.json`, or `/out/error.json` (`{code, reason, fix_hint}`) when the result is rejected.
+  - `run --timeout N -- <tests...>` (laptop runners, `run_public_tests`): runs public tests in `/work`, mounted read-only, and prints the pytest output, capped at 64 KB.
+- **Scoring defences in `run_checks.py`:** the script runs with `python -I` and never imports job code. Each category runs pytest as a child process in a fresh scratch directory, with a fixed environment, the platform `pytest.ini` (`-c`), `--noconftest`, only the category's test files as explicit paths, and a timeout, after which every process of the sandbox user is killed. A result containing `conftest.py`, pytest or Python startup files (`pytest*`, `*.pth`, `sitecustomize.py`, ini files) or a path that collides with a test is rejected. The exit code must agree with the JUnit report (exit 0 with no failures, or exit 1 with some), or the category fails with at least one failed test per file. Skipped tests count as not passed. The output file is written last, replacing anything a test wrote.
+- **Local Docker flags** (HQ `SANDBOX_MODE=docker` and laptop runners): `--network=none --read-only --tmpfs=/tmp:size=64m --cap-drop=ALL --security-opt=no-new-privileges --user=10001 --pids-limit=128 --memory=512m --cpus=1 --init`, no `-e` variables, `/job` and `/work` read-only. On Cloud Run the same image relies on gVisor, the no-NAT subnet and the minimal service account instead.
+- **Known gap:** code under test runs as the same user, and the solution in the same process, as the pytest report. A result written to attack the checker (monkeypatching pytest at import, writing a fake JUnit report, or killing `run_checks.py` and writing its own summary) could fake a pass. Trap checks, stakes and double-runs are the backstop; running each category as a separate user is on the roadmap.
 - **Runtime adapter:** `hq/src/runtimes/python.ts` knows the image, how to lay out the bundle and how to read the summary. A `node.ts` adapter (vitest, Stryker) plugs in later (D15).
 
 ### Ledger
@@ -245,6 +251,7 @@ HQ:
 | `GCP_PROJECT`, `GCP_REGION` | Project and region |
 | `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
+| `SANDBOX_IMAGE` | Sandbox image for `SANDBOX_MODE=docker` (default `sideagent-sandbox-python:dev`) |
 | `KMS_KEY` | Vault key resource name |
 | `BLOB_BACKEND`, `VAULT_BACKEND`, `REDACTOR_BACKEND` | `local` / `gcs`, `local` / `kms`, `pattern` / `dlp` |
 | `BLOB_LOCAL_DIR` | Folder for `BLOB_BACKEND=local` (default `.data/blobs`) |
@@ -262,6 +269,7 @@ Field CLI:
 | `SIDEAGENT_HQ_URL`, `SIDEAGENT_API_KEY` | HQ endpoint and runner key |
 | `SIDEAGENT_MODEL_BACKEND` | `ollama` / `vertex` / `gemini-api` |
 | `SIDEAGENT_MODEL` | Model ID for the backend |
+| `SIDEAGENT_SANDBOX_IMAGE` | Image for `run_public_tests` (default `sideagent-sandbox-python:dev`) |
 | `SIDEAGENT_SIMULATE_CHEAT` | Demo double agent |
 | `GEMINI_API_KEY` | Only for the `gemini-api` backend |
 
@@ -275,6 +283,7 @@ Field CLI:
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
 - The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
 - Laptop runner: install Ollama, pull a Gemma model, `pnpm --filter sideagent dev field`.
+- Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures against it; it is skipped without Docker, except in CI.
 
 ## Testing
 
@@ -347,6 +356,7 @@ These run as throwaway experiments in `infra/experiments/`, not app deploys, and
 | Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; `setup-gcp.sh` and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
 | Mutation testing too slow | Cap mutants; run strength scoring only in `review`, not on every check |
 | Sandbox can reach Google APIs | Minimal sandbox IAM now; VPC Service Controls later |
+| A result attacks the checker from inside the test process | Scoring defences in `run_checks.py`; trap checks and stakes; separate sandbox user per category later |
 | Scope creep | Must-have list above is the contract; everything else waits for day 4 |
 
 ## Technical open questions
