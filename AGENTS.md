@@ -8,8 +8,9 @@ Before starting any task, read:
 
 1. [`docs/design.md`](docs/design.md) for the mission lifecycle, trust layer, interfaces and threat model.
 2. [`docs/technical.md`](docs/technical.md) for the stack, repo layout, components, cloud resources, configuration, development setup and the 5-day plan.
-3. [`docs/decisions.md`](docs/decisions.md) for settled decisions. Do not reopen them unless the user asks. If a task seems to conflict with a decision, stop and ask.
-4. [`docs/proposal.md`](docs/proposal.md) when the task touches the pitch, demo, dashboard copy or anything a hackathon judge will see.
+3. [`docs/phases.md`](docs/phases.md) for the build order. Work within the current phase and make its review demo or tests pass.
+4. [`docs/decisions.md`](docs/decisions.md) for settled decisions. Do not reopen them unless the user asks. If a task seems to conflict with a decision, stop and ask.
+5. [`docs/proposal.md`](docs/proposal.md) when the task touches the pitch, demo, dashboard copy or anything a hackathon judge will see.
 
 ## Project context
 
@@ -41,7 +42,8 @@ These follow from the product's core promise. Treat violations as bugs.
 
 - TypeScript everywhere (pnpm workspace): `protocol/`, `hq/`, `field/`, `control/`. The only non-TypeScript code is the check script inside sandbox images.
 - `pnpm install`, then `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`. Run typecheck and lint before committing.
-- Local development uses the Firebase emulators, `PIPELINE_MODE=inline` and `SANDBOX_MODE=docker` (see `docs/technical.md`).
+- Local first: every cloud dependency goes behind an adapter with a local default (see "Cloud adapters" in `docs/technical.md`). Don't call GCP services other than model APIs before Phase 7.
+- No always-on cloud resources (minimum instances, Cloud NAT, VPC connectors, load balancers). Everything must scale to zero (D20).
 - Schemas live in `protocol/` (Zod) and are the single source for validation, MCP tools and Gemini output. Don't redefine types elsewhere.
 - Model IDs come from configuration, never hardcoded.
 - Code jobs carry a required `runtime`; only `python` is implemented. Keep runtime-specific logic inside `hq/src/runtimes/`.

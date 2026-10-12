@@ -10,6 +10,8 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Rejected:** "Use your leftover Claude Max / ChatGPT Pro quota" as the core mechanism. It stays only as motivation ("wasted capacity").
 
+**Clarified by D18:** developers may use Claude Code or Codex to solve their own test jobs during development.
+
 ## D2. Verify results, not work (2026-10-13)
 
 **Decision:** No proof-of-work or compute attestation. Pass/fail comes from tests run by HQ: poster-written hidden tests, platform-written tests, and trap checks.
@@ -104,7 +106,7 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 ## D16. Scope for a 5-day, 2-person build (2026-10-13)
 
-**Decision:** Demo must-haves and the day plan are in `technical.md` under "5-day plan". A2A, device linking, signed logs, OpenTelemetry, JS jobs and the model-monitoring dashboard go on the roadmap slide. Owners create per-agent API keys in the dashboard instead of device linking.
+**Decision:** Demo must-haves and the build order are in `technical.md` ("5-day plan") and `phases.md`. A2A, device linking, signed logs, OpenTelemetry, JS jobs and the model-monitoring dashboard go on the roadmap slide. Owners create per-agent API keys in the dashboard instead of device linking.
 
 **Why:** The demo flow must work end to end on day 5; everything else is secondary.
 
@@ -114,4 +116,33 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Why:** No GPU quota wait. Service-account auth means no API key in the container, so a compromised runner holds nothing reusable. Job content stays in the GCP project under enterprise data terms, and HQ already uses Vertex AI.
 
+**Amended by D20:** house runners run as Cloud Run Jobs started per job, not always-on services.
+
 **Rejected:** Cloud Run GPU with local Gemma (GPU quota risk in a 5-day build; Docker can't run inside Cloud Run anyway). Gemini API as the primary backend (API key in the container; free-tier data terms).
+
+## D18. Claude Code and Codex allowed for posting, and for solving only in development (2026-10-13)
+
+**Decision:**
+- Any MCP client (Gemini CLI, Claude Code, Codex) may post jobs. The demo video uses Gemini CLI.
+- The field CLI has a dev-only command executor that runs `claude -p` or `codex exec`. It requires `--executor command --trusted-dev`, claims only jobs posted by the same owner, and never runs in house runners or the demo.
+- Running it for other people's jobs requires provider API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), never subscription logins.
+
+**Why:** It lets the runner protocol (claim, workspace, submit) be finished on day 1 without waiting for the Gemma loop, and gives a quality baseline for choosing demo jobs. Solving your own team's test jobs on your own machine is ordinary personal use, so it doesn't conflict with D1. Judges must see Gemma solving jobs.
+
+**Trade-off:** These CLIs need network access and their own credentials, so the command executor is not a real sandbox. Treat it as trusted mode.
+
+## D19. Local first; deploy to GCP once, late (2026-10-13)
+
+**Decision:** Phases 0–6 run on laptops. Every cloud dependency sits behind an adapter with a local default: `PipelineRunner` (inline / Cloud Tasks), `Sandbox` (Docker / Cloud Run Jobs), `BlobStore` (local folder / Cloud Storage), `Vault` (local key / Cloud KMS), `Redactor` (pattern matcher / Sensitive Data Protection), `HouseRunnerDispatcher` (child process / Cloud Run Jobs). Before Phase 7, the only cloud calls are model APIs and optional Sensitive Data Protection tests. Deployment happens in Phase 7, starting by day 4 at 3pm at the latest.
+
+**Why:** Faster iteration, no cloud spend or IAM work during the build, and pipeline steps are easier to test with fakes.
+
+**Risk handling:** The two cloud-only unknowns (managed Gemma at `global`; sandbox mount with no internet) are tested on day 1 as throwaway experiments. Deploy scripts are written during the build.
+
+## D20. Zero idle cost; house runners started on demand (2026-10-13)
+
+**Decision:** Every GCP resource scales to zero or is billed per use. House runners are Cloud Run Jobs that HQ's `dispatch` step starts per job (`sideagent field --once --job <id>`), not services with minimum instances. No Cloud NAT, VPC connector, load balancer or static IP. Budget alert, caps on paid work per agent and per job, and a teardown script.
+
+**Why:** Two always-on house runners would cost about $100/month while idle; everything else is free or pennies at our volume. Target is under about $1/month idle.
+
+**Trade-off:** Each house-runner run has a cold start of tens of seconds. Jobs are asynchronous, and the dashboard shows it as "field agent dispatched".

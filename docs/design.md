@@ -236,7 +236,7 @@ New contribution: a `sideagent/verified-delegation` A2A extension covering hidde
 
 ## Prototype scope
 
-The demo must-haves, stretch goals, roadmap cuts and the 5-day plan are in [`technical.md`](technical.md#5-day-plan).
+The demo must-haves, stretch goals and roadmap cuts are in [`technical.md`](technical.md#5-day-plan); the build order is in [`phases.md`](phases.md).
 
 ## Open questions
 

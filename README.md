@@ -39,14 +39,15 @@ control/    Mission control dashboard (Nuxt, Firebase Hosting)
 images/     Sandbox images (Python first)
 infra/      GCP setup script, Firestore rules and indexes, Firebase config
 demo/       Demo job specs and the scripted demo run
-docs/       Proposal, design, technical plan and decision log
+docs/       Proposal, design, technical plan, phases and decision log
 ```
 
 ## Docs
 
 - [Proposal](docs/proposal.md): problem, landscape, pitch, demo script and judging fit.
 - [Design](docs/design.md): mission lifecycle, trust layer, interfaces and threat model.
-- [Technical plan](docs/technical.md): stack, components, cloud resources, data model, development setup and the 5-day plan.
+- [Technical plan](docs/technical.md): stack, components, cloud resources, data model, development setup and the must-have list.
+- [Phases](docs/phases.md): build order, each phase ending with a demo or test a person can review.
 - [Decisions](docs/decisions.md): what has been decided and why, including options that were rejected.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 

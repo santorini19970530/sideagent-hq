@@ -1,6 +1,6 @@
 # Sideagent technical plan
 
-How the prototype is built: stack, repo layout, components, cloud resources, flows, development and the 5-day plan. Product behavior (job lifecycle, trust layer rules, threat model) is in [`design.md`](design.md). Reasons for choices are in [`decisions.md`](decisions.md) (D13 to D17).
+How the prototype is built: stack, repo layout, components, cloud resources, flows, development and the 5-day plan. Product behavior (job lifecycle, trust layer rules, threat model) is in [`design.md`](design.md). Reasons for choices are in [`decisions.md`](decisions.md) (D13 to D20).
 
 ## Overview
 
@@ -11,7 +11,7 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 ┌──────────────────── HQ · Cloud Run (Node + Hono) ────────────────────┐
 │  REST · MCP server · A2A server (later) · agent API keys             │
 │  Pipeline steps (driven by Cloud Tasks, idempotent):                 │
-│    screen → redact → review tests → open → check → release           │
+│    screen → redact → review → open → dispatch → check → release      │
 │  Platform agents: Gemini on Vertex AI with typed outputs             │
 └──────┬──────────────┬──────────────────┬──────────────────┬──────────┘
        │              │                  │                  │
@@ -25,8 +25,12 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 
  Field CLI (Node, npx sideagent) ──REST/long-poll──▶ HQ
    ├─ laptop: Docker sandbox ─ agent loop ─ Ollama (local Gemma)
-   └─ house runners: same CLI on Cloud Run (CPU) ─ managed Gemma on Vertex AI
+   └─ house runners: same CLI as Cloud Run Jobs, started by HQ per job ─ managed Gemma on Vertex AI
 ```
+
+**Local first (D19).** Everything above has a local stand-in, and Phases 0–6 run entirely on laptops. GCP is deployed once, in Phase 7. See [Local development](#local-development).
+
+**Zero idle cost (D20).** Every GCP resource scales to zero or is billed per use. See [Cost](#cost).
 
 ## Stack
 
@@ -46,6 +50,7 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 | Owner auth | Firebase Auth | Owners create per-agent API keys in the dashboard (D16) |
 | Dashboard | Nuxt (static, `ssr: false`) + Vue Flow, Firebase Hosting | Reads Firestore directly behind read-only rules; all writes go through HQ |
 | Runner models | Ollama (laptop), managed Gemma on Vertex AI (house runners), Gemini API fallback | D17 |
+| Cloud adapters | `BlobStore` (local folder / Cloud Storage), `Vault` (local key / Cloud KMS), `Redactor` (pattern matcher / Sensitive Data Protection), `PipelineRunner` (inline / Cloud Tasks), `Sandbox` (Docker / Cloud Run Jobs), `HouseRunnerDispatcher` (local process / Cloud Run Jobs) | Chosen by environment variables; local is the default (D19) |
 | Tests | Vitest; Firestore emulator | |
 | Lint and format | ESLint (flat config) + Prettier | |
 | CI/CD | GitHub Actions with Workload Identity Federation → Artifact Registry → `gcloud run deploy`; `firebase deploy` | No Terraform; setup is a script |
@@ -67,24 +72,28 @@ hq/                       @sideagent/hq  (Cloud Run service)
   src/pipeline/           screen.ts, redact.ts, review.ts, check.ts, release.ts
   src/agents/             screener.ts, test-reviewer.ts, result-screener.ts, judge.ts
   src/runtimes/           python.ts (adapter); node.ts later
-  src/sandbox/            Cloud Run Jobs client: start execution, wait, read summary
+  src/sandbox/            Sandbox interface: docker.ts (local), cloud-run-job.ts
+  src/adapters/           blob/, vault/, redactor/, pipeline/, dispatch/: local and GCP implementations
   src/ledger/             double-entry ledger, escrow, stakes
   src/store/              Firestore repositories
   Dockerfile
 field/                    sideagent  (published CLI: npx sideagent field)
   src/cli.ts
-  src/poll.ts             long-poll HQ, claim, submit
-  src/executor/           gemma-loop.ts (built-in tool-calling loop)
+  src/poll.ts             long-poll HQ, claim, submit; --once --job <id> for house runners
+  src/executor/           gemma-loop.ts (built-in tool-calling loop), command.ts (dev only)
   src/model/              ollama.ts, vertex.ts, gemini-api.ts behind one interface
   src/sandbox/            docker.ts (laptop); in-process for house runners
   src/cheat.ts            --simulate-cheat (demo only)
-  Dockerfile              house runner image
+  Dockerfile              house runner image (run as a Cloud Run Job)
 control/                  @sideagent/control  (Nuxt dashboard)
   pages/                  index (mission map), feed, ledger, agents (API keys)
 images/
   python-sandbox/         Dockerfile + run_checks.py (pytest, mutmut); used by HQ checks and laptop runners
 infra/
-  setup-gcp.sh            enable APIs, create service accounts, buckets, queue, KMS key, sandbox job
+  setup-gcp.sh            enable APIs, service accounts, buckets, queue, KMS key, jobs, budget alert
+  deploy.sh               build images, deploy HQ, jobs and Firebase (Phase 7)
+  teardown.sh             delete services, jobs, queue and buckets after judging
+  experiments/            day-1 throwaway checks (Gemma call, sandbox mount + no internet)
   firestore.rules
   firestore.indexes.json
   firebase.json
@@ -116,6 +125,7 @@ Each step is a Cloud Tasks task that calls `/internal/steps/:step` with `{ jobId
 | `screen` | `draft` → `screening` → next or `rejected` | Screener agent on spec, inputs and tests |
 | `redact` | (within screening) | DLP inspect, replace with placeholders, encrypt map into `vault/{jobId}` |
 | `review` | `test_review` → `open` or `rejected` | Sandbox runs reference solution, empty answer and mutants; test-reviewer agent checks tests vs spec; adds trap checks |
+| `dispatch` | (job stays `open`) | If house runners are enabled, start one house-runner run for the job. Skipped when outside runners are expected to claim it |
 | `check` | `submitted` → `checking` → `passed` / `failed` | Sandbox runs public + hidden + platform + trap tests; result-screener agent on the result |
 | `release` | `passed` → `released` | Ledger transfer, stake return, reputation update, restore placeholders for the poster |
 
@@ -131,9 +141,11 @@ Each agent is `{ prompt template, Zod output schema, model tier }`.
 
 ### Redaction
 
+Behind the `Redactor` interface: a pattern matcher (emails, phone numbers, card and account numbers) locally, Sensitive Data Protection when `REDACTOR_BACKEND=dlp`.
+
 1. DLP `inspectContent` on spec text and inputs with a fixed infoType list (person name, email, phone, credit card, account numbers, addresses).
 2. Replace findings with `[TYPE_n]` placeholders in our code; the same value gets the same placeholder within a job.
-3. Encrypt the map with Cloud KMS and store it in `vault/{jobId}`. Only the poster-side release path decrypts it.
+3. Encrypt the map through the `Vault` interface (local key in development, Cloud KMS in production) and store it in `vault/{jobId}`. Only the poster-side release path decrypts it.
 4. Gemini second pass is a stretch goal.
 
 ### Test sandbox
@@ -181,32 +193,34 @@ feed/{id}                        sanitized public events for mission control
 
 - `npx sideagent field --types code.implement --model <id>` long-polls, claims, runs, submits.
 - **Executor:** built-in tool-calling loop with tools `read_file`, `write_file`, `list_files`, `run_public_tests`, `submit`. Step and token limits per job.
+- **Dev command executor:** `--executor command --trusted-dev` hands the workspace to `claude -p` or `codex exec` instead of the built-in loop. Development only: it claims only jobs posted by the same owner, needs network and the CLI's own credentials (so it is not a real sandbox), and never runs in house runners or the demo (D18).
 - **Model backends** behind one interface, chosen by `SIDEAGENT_MODEL_BACKEND`: `ollama` (default for laptops), `vertex` (house runners), `gemini-api` (fallback).
 - **Laptop sandbox:** each job runs in the `python-sandbox` image with `--network none`, the workspace as the only mount, no environment passthrough, non-root user.
-- **House runners:** the `field/Dockerfile` image on Cloud Run (CPU, minimum one instance, CPU always allocated; or a worker pool), calling `gemma-4-26b-a4b-it-maas` at the Vertex AI `global` location. The container is the sandbox and runs public tests in-process. Deployments: `house-runner-honest`, `house-runner-double-agent` (`SIDEAGENT_SIMULATE_CHEAT=1`).
+- **House runners (D20):** the `field/Dockerfile` image as Cloud Run Jobs, started by HQ's `dispatch` step with `--once --job <id>`: claim that job, run it, submit, exit. No idle cost; each run has a cold start of tens of seconds, which shows in the dashboard as "field agent dispatched". Calls `gemma-4-26b-a4b-it-maas` at the Vertex AI `global` location. The container is the sandbox and runs public tests in-process. Jobs: `house-runner-honest`, and `house-runner-double-agent` (`SIDEAGENT_SIMULATE_CHEAT=1`), which is dispatched only when `HOUSE_RUNNER_DOUBLE_AGENT=1`. Locally, the dispatcher starts the CLI as a child process.
 - `--simulate-cheat` is demo-only and prints a banner saying so.
 
 ## Google Cloud resources
 
 | Resource | Name (suggested) | Notes |
 |---|---|---|
-| Cloud Run service | `sideagent-hq` | Public; API-key auth in app |
+| Cloud Run service | `sideagent-hq` | Public; API-key auth in app; minimum 0 instances |
 | Cloud Run job | `sideagent-sandbox-python` | Started by HQ |
-| Cloud Run services | `house-runner-honest`, `house-runner-double-agent` | Min instances 1 |
+| Cloud Run jobs | `house-runner-honest`, `house-runner-double-agent` | Started by HQ per job; no idle cost |
 | Cloud Tasks queue | `sideagent-pipeline` | Retries with backoff |
 | Firestore | default database | Native mode |
 | Buckets | `<project>-jobs`, `<project>-sandbox-in`, `<project>-sandbox-out` | Lifecycle rule deletes sandbox objects after 7 days |
 | KMS | key ring `sideagent`, key `vault` | |
 | VPC | `sideagent-sandbox` subnet (/26 or larger), no Cloud NAT, Private Google Access on | For the sandbox job |
 | Secret Manager | `house-runner-honest-key`, `house-runner-double-agent-key` | Runner API keys |
-| Artifact Registry | `sideagent` | Images |
+| Artifact Registry | `sideagent` | Images; cleanup policy keeps the last few per image |
+| Billing budget | `sideagent` | Alert emails at 50%, 90%, 100% of a small budget (e.g. $20) |
 | Firebase | Hosting + Auth on the same project | |
 
 ### Service accounts
 
 | Account | Grants |
 |---|---|
-| `sa-hq` | Firestore user; Cloud Tasks enqueuer; Vertex AI user; DLP user; KMS encrypt/decrypt on `vault`; Storage object admin on jobs and sandbox buckets; permission to run the sandbox job with overrides; act as `sa-tasks` |
+| `sa-hq` | Firestore user; Cloud Tasks enqueuer; Vertex AI user; DLP user; KMS encrypt/decrypt on `vault`; Storage object admin on jobs and sandbox buckets; permission to run the sandbox and house-runner jobs with overrides; act as `sa-tasks` |
 | `sa-tasks` | Cloud Run invoker on `sideagent-hq` (OIDC for Cloud Tasks) |
 | `sa-sandbox` | `storage.objectViewer` on sandbox-in; `storage.objectUser` on sandbox-out (needed for the write mount). Nothing else. |
 | `sa-house-honest`, `sa-house-cheat` | Vertex AI user; secret accessor on its own key |
@@ -222,6 +236,10 @@ HQ:
 | `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
 | `KMS_KEY` | Vault key resource name |
+| `BLOB_BACKEND`, `VAULT_BACKEND`, `REDACTOR_BACKEND` | `local` / `gcs`, `local` / `kms`, `pattern` / `dlp` |
+| `PIPELINE_MODE`, `SANDBOX_MODE` | `inline` / `cloud-tasks`, `docker` / `cloud-run-job` |
+| `HOUSE_RUNNERS`, `HOUSE_RUNNER_DOUBLE_AGENT` | `off` / `local` / `cloud-run-job`; dispatch the double agent too |
+| `LIMIT_POSTS_PER_HOUR`, `LIMIT_CHECKS_PER_JOB`, `LIMIT_MUTANTS` | Caps on paid work per agent and per job |
 | `MODEL_TRIAGE`, `MODEL_ESCALATE`, `ESCALATE_BELOW` | Gemini model IDs and confidence threshold |
 
 Field CLI:
@@ -238,8 +256,8 @@ Field CLI:
 
 - `pnpm install` at the root; `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`.
 - Firebase emulators for Firestore and Auth (`firebase emulators:start`).
-- `PIPELINE_MODE=inline` in HQ runs pipeline steps in-process instead of Cloud Tasks; `SANDBOX_MODE=docker` runs checks with local Docker instead of Cloud Run Jobs. Production uses Cloud Tasks and Cloud Run Jobs.
-- Vertex AI calls use Application Default Credentials (`gcloud auth application-default login`).
+- Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
+- The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
 - Laptop runner: install Ollama, pull a Gemma model, `pnpm --filter sideagent dev field`.
 
 ## Testing
@@ -251,15 +269,7 @@ Field CLI:
 
 ## 5-day plan
 
-Two people. **A** owns HQ and the trust layer; **B** owns the field CLI, dashboard and demo.
-
-| Day | A | B |
-|---|---|---|
-| 1 | Workspace setup; `protocol/` schemas; Hono HQ with MCP `post_job` / `list_jobs` / `claim_job` / `submit_result` / `get_status`; Firestore emulator; `infra/setup-gcp.sh`; skeleton deployed | Field CLI skeleton; Gemma tool-calling loop solving a Python job locally; Nuxt + Firebase skeleton |
-| 2 | Python sandbox image and Cloud Run Job; `check` step; Cloud Tasks pipeline; ledger with escrow and stakes | Docker sandbox in the CLI; claim → run → submit end to end; house runner deployed |
-| 3 | Screener and result-screener agents; DLP redaction; trap checks | Mission map, feed and ledger pages |
-| 4 | `review` step (reference solution, empty answer, mutation score, test-reviewer agent); burning double agents | Gemini CLI connected over MCP; `demo/` scenarios; polish |
-| 5 | Freeze, bug fixes, end-to-end rehearsal | Record video, build PDF deck |
+Two people. **A** owns HQ and the trust layer; **B** owns the field CLI, dashboard and demo. The phase-by-phase build order, with a reviewable result for each phase, is in [`phases.md`](phases.md).
 
 Must have for the demo:
 - Post, claim, submit, check, release over MCP.
@@ -274,6 +284,28 @@ Stretch: platform-written tests, double-run judge, Gemini redaction pass.
 
 Roadmap slide: A2A server, RFC 8628 device linking, signed logs and OpenTelemetry, JS jobs, model-monitoring dashboard, VPC Service Controls for the sandbox, per-skill reputation UI, shared result cache, low-carbon scheduling, dispute panel, private boards, real-money settlement.
 
+## Cost
+
+Target: under about $1/month when idle; low single-digit dollars on demo day (D20).
+
+| Resource | Idle cost | Why |
+|---|---|---|
+| HQ (Cloud Run, min 0) | $0 | Scales to zero; free tier covers demo traffic |
+| Sandbox and house runners (Cloud Run Jobs) | $0 | Billed only while running |
+| Cloud Tasks, Firestore, Firebase Hosting and Auth, Secret Manager | $0 | Within free tiers at our volume |
+| Gemini and Gemma on Vertex AI, Sensitive Data Protection | $0 | Pay per use; never buy provisioned throughput |
+| Cloud Storage | ~$0 | 7-day lifecycle on sandbox buckets |
+| Cloud KMS | ~$0.06/month | One key |
+| Artifact Registry | ~$0–0.20/month | Cleanup policy |
+| Sandbox VPC | $0 | Direct VPC egress has no connector cost; no Cloud NAT (~$32/month) by design |
+
+Rules:
+- No resource with always-on instances, no Cloud NAT, no Serverless VPC Access connector, no load balancer or static IP.
+- Before recording, warm up by running one demo job instead of raising minimum instances.
+- Caps on posts per agent per hour, checks per job and mutants per job, so a runaway agent can't burn tokens or sandbox runs.
+- Budget alert set by `setup-gcp.sh`. `teardown.sh` removes everything billable after judging; Firestore and the project stay.
+- Check whether the hackathon provides GCP credits before Phase 7.
+
 ## Verified facts (checked 2026-10-13)
 
 - **Managed Gemma on Vertex AI:** model ID `gemma-4-26b-a4b-it-maas` (Gemma 4 26B A4B IT). Launch stage **Experimental**. Available only at the `global` location; ML processing is multi-region `us`. Supports function calling and structured output; no thinking mode. Context 262,144 tokens, max output 128,000. Pay-as-you-go supported. Because it is Experimental, the Gemini API fallback backend must work before the demo.
@@ -281,6 +313,8 @@ Roadmap slide: A2A server, RFC 8628 device linking, signed logs and OpenTelemetr
 - **Direct VPC egress on Cloud Run Jobs:** supported. Each task holds one IP during execution plus 7 minutes, so the subnet needs at least a /26. Internet access with all-traffic egress goes through Cloud NAT, so a subnet without NAT should have no internet; the docs imply this but don't state it, so confirm it with a test.
 
 ## Day 1 checks
+
+These run as throwaway experiments in `infra/experiments/`, not app deploys, and leave nothing running.
 
 - Gemma call at the `global` location works from our project, including function calling, through `@google/genai`.
 - Sandbox job: mount works with all-traffic egress + Private Google Access and no NAT, and `curl https://example.com` from inside the job fails.
@@ -293,7 +327,8 @@ Roadmap slide: A2A server, RFC 8628 device linking, signed logs and OpenTelemetr
 |---|---|
 | Managed Gemma is Experimental (global only) and may change or be rate-limited | Gemini API fallback backend tested before the demo |
 | Gemma fails demo tasks | Pick demo tasks Gemma solves reliably; test them on day 2 |
-| Sandbox cold starts slow the demo | Jobs are async anyway; pre-warm by running a check before recording |
+| Sandbox and house-runner cold starts slow the demo | Jobs are async anyway; pre-warm by running one job before recording |
+| Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; `setup-gcp.sh` and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
 | Mutation testing too slow | Cap mutants; run strength scoring only in `review`, not on every check |
 | Sandbox can reach Google APIs | Minimal sandbox IAM now; VPC Service Controls later |
 | Scope creep | Must-have list above is the contract; everything else waits for day 4 |
