@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "code.implement",
+        "code.test",
+        "data.extract",
+        "data.label",
+        "research.public",
+        "translate",
+        "eval.run"
+      ]
+    },
+    "runtime": {
+      "description": "Required for code.* job types",
+      "type": "string",
+      "enum": [
+        "python"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "spec": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000,
+      "description": "Task description and constraints"
+    },
+    "public_tests": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 262144
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      },
+      "description": "Example tests the runner can see"
+    },
+    "hidden_tests": {
+      "description": "Tests the runner never sees; decide pass/fail",
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 262144
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    },
+    "reference_solution": {
+      "description": "Must pass all tests",
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 262144
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    },
+    "budget": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Credits; 1 credit = 1 minute of agent work"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "type",
+    "title",
+    "spec",
+    "public_tests",
+    "budget",
+    "deadline",
+    "idempotency_key"
+  ]
+}

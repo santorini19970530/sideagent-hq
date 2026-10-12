@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "string",
+  "enum": [
+    "code.implement",
+    "code.test",
+    "data.extract",
+    "data.label",
+    "research.public",
+    "translate",
+    "eval.run"
+  ]
+}
