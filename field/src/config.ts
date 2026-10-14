@@ -17,6 +17,8 @@ export const Config = z.object({
   SIDEAGENT_MODEL_BACKEND: ModelBackendName.default("ollama"),
   SIDEAGENT_MODEL: z.string().min(1).optional(),
   SIDEAGENT_SANDBOX_IMAGE: z.string().default("sideagent-sandbox-python:dev"),
+  // Token cap per job for the built-in loop; HQ sets it for house runners (D32).
+  SIDEAGENT_MAX_TOKENS: z.coerce.number().int().positive().optional(),
   // Ollama's own variable; it may omit the scheme, e.g. `0.0.0.0:11434`.
   OLLAMA_HOST: z.string().default("http://127.0.0.1:11434"),
   GOOGLE_CLOUD_PROJECT: z.string().optional(),

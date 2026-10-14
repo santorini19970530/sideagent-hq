@@ -2,6 +2,7 @@ import type { Auth } from "firebase-admin/auth";
 import type { Firestore } from "firebase-admin/firestore";
 import { createPlatformModel, type PlatformModel } from "../agents/model.ts";
 import type { Config } from "../config.ts";
+import { createLimits, type Limits, type LimitsOptions } from "../limits.ts";
 import { createCheckStep } from "../pipeline/check.ts";
 import { createDispatchStep } from "../pipeline/dispatch.ts";
 import { createReleaseStep } from "../pipeline/release.ts";
@@ -30,6 +31,7 @@ export interface Adapters {
   sandbox: Sandbox;
   model: PlatformModel;
   vault: Vault;
+  limits: Limits;
 }
 
 function redactor(config: Config): Redactor {
@@ -60,6 +62,7 @@ function houseRunners(config: Config): HouseRunnerDispatcher | null {
     modelBackend: config.HOUSE_RUNNER_MODEL_BACKEND,
     model: config.HOUSE_RUNNER_MODEL,
     maxRunning: config.HOUSE_RUNNER_MAX,
+    maxTokens: config.HOUSE_RUNNER_MAX_TOKENS,
     // The claim's length plus a margin for submitting.
     timeoutSeconds: config.CLAIM_TTL_SECONDS + 60,
   });
@@ -72,6 +75,7 @@ export function createAdapters(
     sandbox?: Sandbox;
     dispatcher?: HouseRunnerDispatcher | null;
     model?: PlatformModel;
+    limits?: LimitsOptions;
   } = {},
 ): Adapters {
   if (config.BLOB_BACKEND !== "local") notYet("BLOB_BACKEND", config.BLOB_BACKEND);
@@ -80,6 +84,7 @@ export function createAdapters(
   if (config.SANDBOX_MODE !== "docker") notYet("SANDBOX_MODE", config.SANDBOX_MODE);
 
   const db = createFirestore(config);
+  const limits = createLimits(db, config, overrides.limits);
   const blobs = createLocalBlobStore(config.BLOB_LOCAL_DIR);
   const sandbox =
     overrides.sandbox ??
@@ -107,10 +112,10 @@ export function createAdapters(
       pipeline: next,
     }),
     review: createReviewStep({ db, blobs, model, sandbox, config, pipeline: next }),
-    dispatch: createDispatchStep(db, dispatcher),
+    dispatch: createDispatchStep(db, dispatcher, limits),
     check: createCheckStep({ db, blobs, sandbox, model, config, pipeline: next }),
     release: createReleaseStep(db),
   });
 
-  return { db, auth: createAuth(config), blobs, pipeline, sandbox, model, vault };
+  return { db, auth: createAuth(config), blobs, pipeline, sandbox, model, vault, limits };
 }

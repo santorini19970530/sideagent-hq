@@ -30,6 +30,7 @@ Environment:
   SIDEAGENT_API_KEY    Runner API key
   SIDEAGENT_MODEL_BACKEND  ollama (default), vertex or gemini-api
   SIDEAGENT_MODEL      Model ID; ollama defaults to gemma4:26b-a4b, vertex to gemini-2.5-flash-lite
+  SIDEAGENT_MAX_TOKENS Token cap per job
   OLLAMA_HOST          Ollama URL (default http://127.0.0.1:11434)
   GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION  Vertex AI project and location (default global)
   GEMINI_API_KEY       Key for the gemini-api backend
@@ -85,6 +86,7 @@ async function field(argv: string[]) {
     executor = createGemmaLoopExecutor({
       model: createModelBackend(config, values.model),
       tests: createDockerTestRunner({ image: config.SIDEAGENT_SANDBOX_IMAGE }),
+      maxTokens: config.SIDEAGENT_MAX_TOKENS,
     });
   } else {
     fail(`Unknown --executor ${values.executor}; use gemma or command`);

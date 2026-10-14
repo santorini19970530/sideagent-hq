@@ -21,7 +21,7 @@ describe("dispatch step", () => {
 
     // A replayed post and a retried step both find the job already dispatched.
     await h.call(keys.poster, "POST", "/v1/jobs", spec);
-    await createDispatchStep(h.adapters.db, { start })({ jobId });
+    await createDispatchStep(h.adapters.db, { start }, h.adapters.limits)({ jobId });
     expect(start.mock.calls.filter(([id]) => id === jobId)).toHaveLength(1);
 
     const s = await status(keys.poster, jobId);
@@ -39,7 +39,7 @@ describe("dispatch step", () => {
     const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     await off.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`, {});
     const other = vi.fn(async () => {});
-    await createDispatchStep(off.adapters.db, { start: other })({ jobId });
+    await createDispatchStep(off.adapters.db, { start: other }, off.adapters.limits)({ jobId });
     expect(other).not.toHaveBeenCalled();
   });
 
@@ -49,10 +49,10 @@ describe("dispatch step", () => {
     const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     const failing = vi.fn(async () => Promise.reject(new Error("busy")));
     await expect(
-      createDispatchStep(off.adapters.db, { start: failing })({ jobId }),
+      createDispatchStep(off.adapters.db, { start: failing }, off.adapters.limits)({ jobId }),
     ).rejects.toThrow("busy");
     const retry = vi.fn(async () => {});
-    await createDispatchStep(off.adapters.db, { start: retry })({ jobId });
+    await createDispatchStep(off.adapters.db, { start: retry }, off.adapters.limits)({ jobId });
     expect(retry).toHaveBeenCalledWith(jobId);
     const s = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     expect(s.events.slice(-3).map((e) => e.detail)).toEqual([
@@ -67,7 +67,7 @@ describe("dispatch step", () => {
     const keys = await off.agents();
     const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     const before = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
-    await createDispatchStep(off.adapters.db, null)({ jobId });
+    await createDispatchStep(off.adapters.db, null, off.adapters.limits)({ jobId });
     const after = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     expect(after.events).toEqual(before.events);
   });
@@ -93,6 +93,7 @@ describe("house runner environment", () => {
         hqUrl: "http://localhost:8080",
         apiKey: "sk_house",
         modelBackend: "vertex",
+        maxTokens: 200_000,
       },
       {
         PATH: "/usr/bin",
@@ -108,6 +109,7 @@ describe("house runner environment", () => {
       SIDEAGENT_HQ_URL: "http://localhost:8080",
       SIDEAGENT_API_KEY: "sk_house",
       SIDEAGENT_MODEL_BACKEND: "vertex",
+      SIDEAGENT_MAX_TOKENS: "200000",
     });
   });
 });

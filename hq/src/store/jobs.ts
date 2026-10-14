@@ -16,6 +16,8 @@ export interface JobDoc extends JobView<Timestamp> {
   screeningFee: number;
   idempotencyKey: string;
   requestHash: string;
+  /** Submissions over all claims, capped by LIMIT_CHECKS_PER_JOB (D32). Absent means 0. */
+  checksUsed?: number;
 }
 
 /** States in which a runner holds a claim that can time out. */

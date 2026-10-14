@@ -13,7 +13,7 @@ import type { GenerateJson, JsonAnswer, PlatformModel } from "../src/agents/mode
 import type { HouseRunnerDispatcher } from "../src/adapters/dispatch/types.ts";
 import { createAdapters } from "../src/adapters/index.ts";
 import { createApp } from "../src/app.ts";
-import { loadConfig } from "../src/config.ts";
+import { loadConfig, type Config } from "../src/config.ts";
 import type { CheckOutcome, MutantScore, Sandbox } from "../src/sandbox/types.ts";
 import { createAgent } from "../src/store/agents.ts";
 import { createOwner } from "../src/store/owners.ts";
@@ -115,19 +115,32 @@ function defaultAnswer(agent: string): unknown {
 
 // Runs against the Firestore emulator started by `pnpm test`. Every test creates its own
 // owner and agents, so test files can share the emulator without clearing it.
-// House runners are off unless a test passes a `dispatcher`.
+// House runners are off unless a test passes a `dispatcher`. Post limits are lifted unless a
+// test sets them in `config`, and each harness has its own counters and kill switch, the switch
+// read without a cache.
 export function createHarness({
   dispatcher = null,
-}: { dispatcher?: HouseRunnerDispatcher | null } = {}) {
+  config: overrides = {},
+}: { dispatcher?: HouseRunnerDispatcher | null; config?: Partial<Config> } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sideagent-blobs-"));
   const config = {
     ...loadConfig(process.env),
     BLOB_LOCAL_DIR: dir,
     VAULT_LOCAL_KEY_FILE: join(dir, "vault.key"),
+    LIMIT_POSTS_PER_HOUR: 1_000_000,
+    LIMIT_POSTS_PER_DAY: 1_000_000,
+    ...overrides,
   };
   const sandbox = createFakeSandbox();
   const model = createFakeModel();
-  const adapters = createAdapters(config, { sandbox, dispatcher, model });
+  const testId = randomUUID();
+  const configDoc = `config/test-${testId}`;
+  const adapters = createAdapters(config, {
+    sandbox,
+    dispatcher,
+    model,
+    limits: { configDoc, usageCollection: `usage-test-${testId}`, cacheMs: 0 },
+  });
   const clock = { now: new Date() };
   const app = createApp(config, adapters, { now: () => clock.now });
 
@@ -201,5 +214,10 @@ export function createHarness({
     return { res, jobId, status: status! };
   }
 
-  return { config, adapters, sandbox, model, app, clock, call, agents, jobSpec, post };
+  /** Sets this harness's kill switch (D32). */
+  async function pause(paused: boolean) {
+    await adapters.db.doc(configDoc).set({ paused });
+  }
+
+  return { config, adapters, sandbox, model, app, clock, call, agents, jobSpec, post, pause };
 }

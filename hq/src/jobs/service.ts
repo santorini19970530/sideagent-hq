@@ -24,6 +24,7 @@ import type { Vault } from "../adapters/vault/types.ts";
 import type { Config } from "../config.ts";
 import { HqError } from "../errors.ts";
 import { sha256Hex } from "../hash.ts";
+import type { Limits } from "../limits.ts";
 import {
   accounts,
   balanceInTx,
@@ -63,6 +64,7 @@ export interface JobServiceDeps {
   blobs: BlobStore;
   pipeline: PipelineRunner;
   vault: Vault;
+  limits: Limits;
   config: Pick<
     Config,
     | "CLAIM_TTL_SECONDS"
@@ -70,6 +72,7 @@ export interface JobServiceDeps {
     | "STAKE_PERCENT"
     | "TIMEOUT_SLASH_PERCENT"
     | "SCREENING_FEE"
+    | "LIMIT_CHECKS_PER_JOB"
   >;
   now?: () => Date;
 }
@@ -82,6 +85,7 @@ export function createJobService({
   blobs,
   pipeline,
   vault,
+  limits,
   config,
   now = () => new Date(),
 }: JobServiceDeps) {
@@ -97,6 +101,7 @@ export function createJobService({
 
     const existing = await ref.get();
     if (existing.exists) return replayJob(jobId, existing.data() as JobDoc, requestHash);
+    await limits.requireRunning();
 
     // Blob keys derive from the job ID, so a retry after a partial failure overwrites them.
     const specRef = `jobs/${jobId}/spec.md`;
@@ -120,6 +125,8 @@ export function createJobService({
         input.budget + fee,
         fee ? `This job's budget plus the ${fee}-credit screening fee` : "This job's budget",
       );
+      // The transaction's last read; writes follow.
+      await limits.reservePost(tx, agent.ownerId, at);
       const ts = Timestamp.fromDate(at);
       const job: JobDoc = {
         posterAgentId: agent.id,
@@ -291,6 +298,7 @@ export function createJobService({
         replaySubmission(jobId, submissionId, existing.data()!, requestHash, state),
       );
     }
+    await limits.requireRunning();
 
     const resultRef = await putJson(
       blobs,
@@ -314,6 +322,16 @@ export function createJobService({
       if (claim.attemptsLeft <= 0) {
         throw new HqError("invalid_state", "No submission attempts left", "Claim another job");
       }
+      // Claims can end and reopen, so attempts alone don't bound the checks a job costs (D32).
+      const checksUsed = u.job.checksUsed ?? 0;
+      if (checksUsed >= config.LIMIT_CHECKS_PER_JOB) {
+        throw new HqError(
+          "rate_limited",
+          `This job has used all ${config.LIMIT_CHECKS_PER_JOB} of its checks`,
+          "Claim another job",
+        );
+      }
+      u.job.checksUsed = checksUsed + 1;
       claim.attemptsLeft -= 1;
       u.tx.create(subRef, {
         runnerAgentId: agent.id,

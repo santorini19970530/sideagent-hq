@@ -33,6 +33,8 @@ const Config = z.object({
   HOUSE_RUNNER_MODEL_BACKEND: ModelBackendName.default("vertex"),
   HOUSE_RUNNER_MODEL: z.string().min(1).optional(),
   HOUSE_RUNNER_MAX: z.coerce.number().int().positive().default(2),
+  // Passed to house runners as SIDEAGENT_MAX_TOKENS (D32).
+  HOUSE_RUNNER_MAX_TOKENS: z.coerce.number().int().positive().default(200_000),
   // Demo double agent (Phase 5): dispatched instead of the honest runner, with its own key.
   HOUSE_RUNNER_DOUBLE_AGENT: z.stringbool().default(false),
   HOUSE_RUNNER_DOUBLE_AGENT_API_KEY: z.string().min(1).optional(),
@@ -52,6 +54,11 @@ const Config = z.object({
   // Test review (D31): mutants of the reference solution per job, and the strength score below
   // which the poster gets a fix hint.
   LIMIT_MUTANTS: z.coerce.number().int().min(1).max(50).default(12),
+  // Spend caps (D32): posts per owner per UTC hour, posts platform-wide per UTC day, and
+  // submissions per job over all its claims.
+  LIMIT_POSTS_PER_HOUR: z.coerce.number().int().positive().default(10),
+  LIMIT_POSTS_PER_DAY: z.coerce.number().int().positive().default(40),
+  LIMIT_CHECKS_PER_JOB: z.coerce.number().int().positive().default(6),
   TEST_STRENGTH_MIN: Percent.default(60),
   REDACTOR_BACKEND: z.enum(["pattern", "dlp"]).default("pattern"),
   VAULT_BACKEND: z.enum(["local", "kms"]).default("local"),

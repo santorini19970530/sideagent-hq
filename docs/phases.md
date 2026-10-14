@@ -171,11 +171,14 @@ Starts by day 4 at 3pm at the latest.
 - Switch adapters to GCP: `PIPELINE_MODE=cloud-tasks`, `SANDBOX_MODE=cloud-run-job`, `BLOB_BACKEND=gcs`, `VAULT_BACKEND=kms`, `REDACTOR_BACKEND=dlp`, `HOUSE_RUNNERS=cloud-run-job`.
 - Add deploy steps to GitHub Actions (Workload Identity Federation).
 - Gemini API fallback backend tested against production.
+- Spend caps (D32), built and tested locally first: HQ limits on posts per owner per hour, posts per day and checks per job, the `config/platform.paused` kill switch and the house-runner token cap; GCP settings in the scripts (HQ max 2 instances, jobs with `--max-retries 0` and a task timeout, Cloud Tasks `--max-attempts 5`); the $10 budget with the `budget-guard` function (pause at 100%, billing off at 200%). `infra/teardown.sh` removes everything billable after judging.
+- Done locally (2026-10-15): the HQ caps (`LIMIT_POSTS_PER_HOUR`, `LIMIT_POSTS_PER_DAY`, `LIMIT_CHECKS_PER_JOB`), the kill switch and `HOUSE_RUNNER_MAX_TOKENS`, covered by `hq/test/limits.test.ts`.
 
 **Review demo**
 - Gemini CLI pointed at the live HQ posts a job; HQ dispatches a house runner; the result comes back; the job moves in the dashboard on its Firebase URL.
 - Rerun the Phase 5 demo jobs against production.
 - After 15 minutes idle, `gcloud run services list` and `gcloud run jobs executions list` show nothing running.
+- Against production: an 11th post in one hour gets `rate_limited`; setting `config/platform.paused` refuses posts; a test budget notification at 100% makes `budget-guard` pause the platform (the 200% path is checked with a dry run, not by turning billing off).
 
 ## Phase 8: Demo hardening and submission
 

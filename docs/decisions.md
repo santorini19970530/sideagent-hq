@@ -237,3 +237,16 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Trade-off:** Some mutants are equivalent (no test could catch them), so the score is a lower bound. The operator set is smaller than mutmut's. Review time grows by about one pytest run per mutant per category, on the order of 10 s at the default cap. The Gemini test reviewer (tests vs spec) is not built yet.
 
+
+## D32. Spend is capped in HQ, with a billing budget as the backstop (2026-10-15)
+
+**Decision:** Sign-in to mission control stays open, so anyone with a Google account can get starting credits and post jobs. Spend is limited in three layers:
+1. **HQ caps** (enforced at once): `LIMIT_POSTS_PER_HOUR` (10 per owner, across all its agents), `LIMIT_POSTS_PER_DAY` (40 platform-wide, UTC day), `LIMIT_CHECKS_PER_JOB` (6 submissions per job over all claims), `LIMIT_MUTANTS` (12) and `HOUSE_RUNNER_MAX_TOKENS` (200,000 per house-runner run, passed as `SIDEAGENT_MAX_TOKENS`). A limit hit returns `rate_limited` with the time to retry. A kill switch, `config/platform.paused` in Firestore, refuses new posts and submissions and skips dispatch while set. The post counters live in `usage/` documents, written in the same transaction as the post, with an `expireAt` for a Firestore TTL policy; the check count is on the job. Each HQ instance caches the kill switch for 30 s, so a pause takes up to that long to apply. One platform-wide day counter is fine at this volume (Firestore takes about one write per second per document).
+2. **GCP settings:** HQ `--max-instances 2`; Cloud Run Jobs with `--max-retries 0` and a task timeout; the Cloud Tasks queue with `--max-attempts 5` and low concurrency. A lower Vertex AI request quota is set if the global endpoint allows it.
+3. **Billing budget:** $10 a month, with email alerts at 50%, 90% and 100%. A Pub/Sub topic on the budget feeds a small Cloud Run function (scales to zero) that sets `config/platform.paused` at 100% and **turns off billing for the project at 200%**.
+
+**Why:** Every job's cost already has an upper bound (spec and file size limits, mutants, attempts, runner tokens), so capping the number of jobs and checks caps total spend: about $0.15 per job in the worst case, so about $6 a day at 40 jobs, and about $0.01–0.02 per job in practice. GCP has no spending limit of its own, and budget data arrives hours late, so the HQ caps are the real limit and the budget is a backstop for bugs in them. Turning off billing is the only hard stop GCP offers; the team chose it at 200% so a runaway can't keep growing.
+
+**Trade-off:** A stranger can use up the daily cap and block the demo for the rest of the UTC day; the fix is raising `LIMIT_POSTS_PER_DAY` and redeploying. A job that uses all its checks stays open but takes no more submissions. Turning off billing stops every paid service, including Cloud Run and Firestore, until billing is turned back on by hand, and some resources may be deleted if it stays off. Whether the hackathon provides GCP credits is still unknown.
+
+**Rejected:** Per-agent post limits (an owner can make more agents); caps on agents per owner and on new owners per day (neither changes the spend bound once the platform-wide cap exists); an email allowlist (judges couldn't sign in); Cloud Armor rate limiting (needs a load balancer, against D20).
