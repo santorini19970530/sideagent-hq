@@ -47,7 +47,7 @@ Terraform does not do these:
   curl -X POST -H "authorization: Bearer $TOKEN" -H "x-goog-user-project: sideagent-hq" \
     https://firebase.googleapis.com/v1beta1/projects/sideagent-hq:addFirebase
   ```
-- **Firebase CLI login** as an account that can deploy to the project (`firebase login:add`, then `firebase login:use`), for `deploy.sh control`.
+- **Firebase CLI login** as an account that can deploy to the project, for `deploy.sh control`: `firebase login:add` in a terminal, or, without a browser, run it with `GOOGLE_APPLICATION_CREDENTIALS` pointing at your application default credentials and `XDG_CONFIG_HOME` at an empty folder, so the CLI doesn't pick up another saved login.
 - **Enable Google sign-in** in Firebase Authentication (console, Authentication, Sign-in method), and add the Hosting domain to the authorized domains if it is missing.
 - **Import an existing Firestore database.** If `(default)` already exists (for example created by the Firebase console), import it before the first apply:
   ```sh

@@ -174,7 +174,10 @@ Starts by day 4 at 3pm at the latest.
 - Spend caps (D32), built and tested locally first: HQ limits on posts per owner per hour, posts per day and checks per job, the `config/platform.paused` kill switch and the house-runner token cap; GCP settings in the scripts (HQ max 2 instances, jobs with `--max-retries 0` and a task timeout, Cloud Tasks `--max-attempts 5`); the $10 budget with the `budget-guard` function (pause at 100%, billing off at 200%). `terraform destroy` removes everything billable after judging.
 - Done locally (2026-10-15): the HQ caps (`LIMIT_POSTS_PER_HOUR`, `LIMIT_POSTS_PER_DAY`, `LIMIT_CHECKS_PER_JOB`), the kill switch and `HOUSE_RUNNER_MAX_TOKENS`, covered by `hq/test/limits.test.ts`.
 - Deployed (2026-10-15): Terraform applied (79 resources), images built and rolled out, house-runner keys seeded. A job posted to live HQ went through screening, test review on the Cloud Run sandbox, a dispatched house runner and a 12/12 check to release in about 2.5 minutes; the budget guard paused the platform on a 100% notification and posts were refused. Details under "Production checks" in `technical.md`. Sandbox steps run one at a time on their own queue, so concurrent checks can't see each other's hidden tests.
-- Not yet: mission control on Firebase Hosting (Firebase is linked and the web app registered; Google sign-in has to be turned on in the console, and the Firebase CLI needs the project owner's login), the Gemini CLI demo against live HQ, the per-hour limit and the 200% billing-off path live, and the GitHub Actions deploy steps.
+- Mission control is on Firebase Hosting at `https://sideagent-hq.web.app`, with the read-only rules deployed and Google sign-in enabled (Firebase linked and the web app registered through the API).
+- Signed in to mission control on production with Google: HQ verified the Firebase ID token, created the owner with 100 credits, and the mission map read Firestore live under the read-only rules.
+- Issued a handler key on the Field agents page; live `/mcp` lists the six tools for it.
+- Not yet: posting from Gemini CLI against live HQ, the per-hour limit and the 200% billing-off path live, and the GitHub Actions deploy steps.
 
 **Review demo**
 - Gemini CLI pointed at the live HQ posts a job; HQ dispatches a house runner; the result comes back; the job moves in the dashboard on its Firebase URL.
