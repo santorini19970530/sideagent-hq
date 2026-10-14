@@ -8,6 +8,10 @@ export interface Lane {
   key: LaneKey;
   title: string;
   hint: string;
+  /** Shown in the lane's slot while it holds no missions. */
+  empty: string;
+  /** A literal name, so the icon bundle scan finds it (nuxt.config.ts). */
+  icon: string;
   states: readonly JobState[];
 }
 
@@ -17,26 +21,48 @@ export const LANES: readonly Lane[] = [
     key: "screening",
     title: "Counterintelligence",
     hint: "Briefing screened",
+    empty: "Briefings are screened here",
+    icon: "i-lucide-scan-eye",
     states: ["draft", "screening", "test_review"],
   },
-  { key: "open", title: "Open missions", hint: "Waiting for a field agent", states: ["open"] },
+  {
+    key: "open",
+    title: "Open missions",
+    hint: "Waiting for a field agent",
+    empty: "Cleared missions wait here",
+    icon: "i-lucide-inbox",
+    states: ["open"],
+  },
   {
     key: "claimed",
     title: "In the field",
     hint: "Field agent at work",
+    empty: "Accepted missions move here",
+    icon: "i-lucide-footprints",
     states: ["claimed", "running"],
   },
   {
     key: "checking",
     title: "Debrief check",
     hint: "Hidden tests running",
+    empty: "Debriefs face hidden tests here",
+    icon: "i-lucide-flask-conical",
     states: ["submitted", "checking", "failed"],
   },
-  { key: "released", title: "Dead drop", hint: "Debrief released", states: ["passed", "released"] },
+  {
+    key: "released",
+    title: "Dead drop",
+    hint: "Debrief released",
+    empty: "Passed debriefs land here",
+    icon: "i-lucide-package",
+    states: ["passed", "released"],
+  },
   {
     key: "closed",
     title: "Closed",
     hint: "Rejected, expired or cancelled",
+    empty: "Blocked or expired missions end here",
+    icon: "i-lucide-archive",
     states: ["rejected", "expired", "cancelled", "disputed"],
   },
 ];

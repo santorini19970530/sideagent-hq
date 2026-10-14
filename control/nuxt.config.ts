@@ -14,7 +14,8 @@ export default defineNuxtConfig({
     // Icons Nuxt UI renders itself (header menu, modal close, loading button) aren't in our
     // sources, so the scan can't find them.
     clientBundle: {
-      scan: true,
+      // The default scan skips .ts files, where the lane icons live (app/utils/jobs.ts).
+      scan: { globInclude: ["**/*.{vue,ts}"] },
       icons: ["lucide:menu", "lucide:x", "lucide:loader-circle", "lucide:check"],
     },
   },

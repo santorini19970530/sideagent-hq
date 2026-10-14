@@ -42,15 +42,36 @@ const graph = computed(() => {
     }
   }
 
-  LANES.forEach((lane, i) =>
+  LANES.forEach((lane, i) => {
     nodes.push({
       id: `lane-${lane.key}`,
       type: "lane",
       position: { x: i * LANE_WIDTH, y: 0 },
       data: { lane, count: perLane[i] },
       selectable: false,
-    }),
-  );
+    });
+    // An empty lane keeps a slot where its first card will land, so it reads as a column.
+    if (!perLane[i]) {
+      nodes.push({
+        id: `empty-${lane.key}`,
+        type: "empty",
+        position: { x: i * LANE_WIDTH, y: TOP },
+        data: { lane },
+        selectable: false,
+        focusable: false,
+      });
+    }
+  });
+  if (!jobs.value.length) {
+    nodes.push({
+      id: "notice",
+      type: "notice",
+      position: { x: 0, y: TOP + NODE_HEIGHT },
+      data: {},
+      selectable: false,
+      focusable: false,
+    });
+  }
 
   const bottom = TOP + Math.max(1, ...perLane) * NODE_HEIGHT + 40;
   const taken = new Map<number, number>();
@@ -68,14 +89,26 @@ const graph = computed(() => {
   return { nodes, edges };
 });
 
-const { fitView, onNodeClick } = useVueFlow();
+const { fitView, getViewport, setViewport, onNodeClick, onNodesInitialized } = useVueFlow();
 onNodeClick(({ node }) => {
   if (node.type === "job") selectedId.value = node.id;
 });
+
+/** Fit the map to the canvas, then pin it to the top so a short board doesn't float mid-canvas. */
+async function fitTop() {
+  await fitView({ padding: 0.15, maxZoom: 1 });
+  const { x, zoom } = getViewport();
+  await setViewport({ x, y: 24, zoom });
+}
+// Vue Flow fires this again once added nodes are measured; removals don't fire it, so watch those.
+onNodesInitialized(fitTop);
 watch(
   () => graph.value.nodes.length,
-  () => nextTick(() => fitView({ padding: 0.15, maxZoom: 1 })),
+  (count, before) => {
+    if (count < before) nextTick(fitTop);
+  },
 );
+useResizeObserver(useTemplateRef("canvas"), fitTop);
 </script>
 
 <template>
@@ -89,6 +122,7 @@ watch(
 
     <div class="grid gap-4" :class="{ 'lg:grid-cols-[minmax(0,1fr)_340px]': selected }">
       <UCard
+        ref="canvas"
         class="relative h-[60vh] min-h-115 overflow-hidden lg:h-[calc(100vh-190px)]"
         :ui="{ body: 'h-full p-0 sm:p-0' }"
       >
@@ -100,14 +134,34 @@ watch(
           :zoom-on-scroll="false"
           :min-zoom="0.3"
           :max-zoom="1.5"
-          fit-view-on-init
         >
           <template #node-lane="{ data }">
             <div class="grid w-55 gap-0.5 border-b border-default pb-2 text-xs">
-              <span class="font-mono font-semibold tracking-[0.12em] uppercase">
+              <span
+                class="flex items-center gap-1.5 font-mono font-semibold tracking-[0.12em] uppercase"
+              >
+                <UIcon :name="data.lane.icon" class="size-4 text-muted" />
                 {{ data.lane.title }}
               </span>
               <span class="text-muted">{{ data.lane.hint }} · {{ data.count }}</span>
+            </div>
+          </template>
+          <template #node-empty="{ data }">
+            <div
+              class="grid h-23 w-55 place-items-center rounded-lg border border-dashed border-default p-3 text-center text-xs text-muted"
+            >
+              {{ data.lane.empty }}
+            </div>
+          </template>
+          <template #node-notice>
+            <div class="nodrag nopan grid w-110 gap-1.5 pt-4">
+              <p class="eyebrow">No missions yet</p>
+              <p class="text-muted">
+                Issue a handler key under
+                <ULink to="/agents" class="text-default underline">Field agents</ULink>, connect
+                your agent to HQ over MCP, and ask it to post a job. It appears here as soon as it
+                is filed.
+              </p>
             </div>
           </template>
           <template #node-job="{ data }">
@@ -124,14 +178,6 @@ watch(
             </div>
           </template>
         </VueFlow>
-        <div v-if="!jobs.length" class="absolute inset-x-6 bottom-6 grid max-w-md gap-1.5">
-          <p class="eyebrow">No missions yet</p>
-          <p class="text-muted">
-            Issue a handler key under
-            <ULink to="/agents" class="text-default underline">Field agents</ULink>, connect your
-            agent to HQ over MCP, and ask it to post a job. It appears here as soon as it is filed.
-          </p>
-        </div>
       </UCard>
       <JobTimeline v-if="selected" :key="selected.id" :job="selected" />
     </div>
