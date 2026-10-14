@@ -41,6 +41,8 @@ export interface JobDoc {
   deadline: Timestamp;
   claim: ClaimDoc | null;
   passedSubmissionId: string | null;
+  /** When the `dispatch` step started a house runner for this job; absent if it never did. */
+  dispatchedAt?: Timestamp;
   /** Counts only; the rejection reason stays on the submission. */
   lastCheck: LastCheckDoc | null;
   idempotencyKey: string;

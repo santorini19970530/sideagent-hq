@@ -194,3 +194,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** In the Phase 2b smoke runs managed Gemma (`gemma-4-26b-a4b-it-maas`, Experimental) kept answering `429` "The request queue is full": two runs failed after about 35 s of retries, a passing run spent nearly all of its 61 s waiting, and the slugify job ran out of steps after 375 s. Flash-Lite solved the same jobs in about 5.5 s each with fewer steps and tokens, at the lowest Gemini list price, and switching needs no code. Gemma on laptops keeps the open-model supply story (D1) in the demo, and Gemini meets the Gemini-or-Gemma requirement.
 
 **Rejected:** The Gemini API as the house-runner backend: the same list price, but it puts an API key in the container (D17) and needs prepaid AI Studio credits (day 1 checks).
+
+## D27. Local house runners dispatched on every new job, with a seeded key (2026-10-15)
+
+**Decision:** With `HOUSE_RUNNERS=local`, the `dispatch` step starts one house runner as soon as `post_job` opens a job; there is no grace period for laptop runners. The house runner is an ordinary runner agent under a `House runners` owner, created by the seed script, and HQ hands its key to the child process from `HOUSE_RUNNER_API_KEY`. House runners are `off` by default, so tests and plain development never spawn them.
+
+**Why:** The Phase 4 demo needs a job to finish with no runner started by hand, and an ordinary runner key means the house runner goes through the same claim, stake and check path as anyone else. In Phase 7 the key moves to Secret Manager (D17).
+
+**Trade-off:** A laptop runner and the house runner race for every job, and a job that reopens after a failed claim is not dispatched again. A dispatch delay can come with Phase 5, when the demo races Gemma, the double agent and the house runner.

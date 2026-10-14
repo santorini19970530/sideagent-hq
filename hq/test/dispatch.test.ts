@@ -1,0 +1,103 @@
+import { JobStatus, JobSummary } from "@sideagent/protocol";
+import { describe, expect, it, vi } from "vitest";
+import { houseRunnerEnv } from "../src/adapters/dispatch/local.ts";
+import { createDispatchStep } from "../src/pipeline/dispatch.ts";
+import { createHarness } from "./harness.ts";
+
+const start = vi.fn(async (_jobId: string) => {});
+const h = createHarness({ dispatcher: { start } });
+
+async function status(key: string, jobId: string): Promise<JobStatus> {
+  return JobStatus.parse((await h.call(key, "GET", `/v1/jobs/${jobId}`)).body);
+}
+
+describe("dispatch step", () => {
+  it("starts one house runner when a job opens and records it on the job", async () => {
+    const keys = await h.agents();
+    const spec = h.jobSpec();
+    const posted = await h.call(keys.poster, "POST", "/v1/jobs", spec);
+    const jobId = JobSummary.parse(posted.body).job_id;
+    await vi.waitFor(() => expect(start).toHaveBeenCalledWith(jobId));
+
+    // A replayed post and a retried step both find the job already dispatched.
+    await h.call(keys.poster, "POST", "/v1/jobs", spec);
+    await createDispatchStep(h.adapters.db, { start })({ jobId });
+    expect(start.mock.calls.filter(([id]) => id === jobId)).toHaveLength(1);
+
+    const s = await status(keys.poster, jobId);
+    expect(s.state).toBe("open");
+    expect(s.events.map((e) => [e.from, e.to, e.detail]).at(-1)).toEqual([
+      "open",
+      "open",
+      "Field agent dispatched",
+    ]);
+  });
+
+  it("skips jobs that are no longer open", async () => {
+    const off = createHarness();
+    const keys = await off.agents();
+    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
+    const jobId = JobSummary.parse(posted.body).job_id;
+    await off.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`, {});
+    const other = vi.fn(async () => {});
+    await createDispatchStep(off.adapters.db, { start: other })({ jobId });
+    expect(other).not.toHaveBeenCalled();
+  });
+
+  it("unmarks the job when the run can't start, so a retry dispatches again", async () => {
+    const off = createHarness();
+    const keys = await off.agents();
+    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
+    const jobId = JobSummary.parse(posted.body).job_id;
+    const failing = vi.fn(async () => Promise.reject(new Error("busy")));
+    await expect(
+      createDispatchStep(off.adapters.db, { start: failing })({ jobId }),
+    ).rejects.toThrow("busy");
+    const retry = vi.fn(async () => {});
+    await createDispatchStep(off.adapters.db, { start: retry })({ jobId });
+    expect(retry).toHaveBeenCalledWith(jobId);
+    const s = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(s.events.slice(-3).map((e) => e.detail)).toEqual([
+      "Field agent dispatched",
+      "Field agent dispatch failed",
+      "Field agent dispatched",
+    ]);
+  });
+
+  it("does nothing when house runners are off", async () => {
+    const off = createHarness();
+    const keys = await off.agents();
+    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
+    const jobId = JobSummary.parse(posted.body).job_id;
+    const before = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    await createDispatchStep(off.adapters.db, null)({ jobId });
+    const after = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(after.events).toEqual(before.events);
+  });
+});
+
+describe("house runner environment", () => {
+  it("passes only the runner's own settings, never HQ secrets", () => {
+    const env = houseRunnerEnv(
+      {
+        hqUrl: "http://localhost:8080",
+        apiKey: "sk_house",
+        modelBackend: "vertex",
+      },
+      {
+        PATH: "/usr/bin",
+        GOOGLE_CLOUD_PROJECT: "p",
+        HOUSE_RUNNER_API_KEY: "sk_house",
+        FIRESTORE_EMULATOR_HOST: "127.0.0.1:8180",
+        SECRET_TOKEN: "x",
+      },
+    );
+    expect(env).toEqual({
+      PATH: "/usr/bin",
+      GOOGLE_CLOUD_PROJECT: "p",
+      SIDEAGENT_HQ_URL: "http://localhost:8080",
+      SIDEAGENT_API_KEY: "sk_house",
+      SIDEAGENT_MODEL_BACKEND: "vertex",
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import { ModelBackendName } from "@sideagent/protocol";
 import { z } from "zod";
 
 const Percent = z.coerce.number().int().min(0).max(100);
@@ -21,6 +22,13 @@ const Config = z.object({
   STARTING_CREDITS: z.coerce.number().int().nonnegative().default(100),
   STAKE_PERCENT: Percent.default(20),
   TIMEOUT_SLASH_PERCENT: Percent.default(50),
+  // House runners (D20): `local` starts the field CLI as a child process per job.
+  HOUSE_RUNNERS: z.enum(["off", "local", "cloud-run-job"]).default("off"),
+  // Runner key from `pnpm --filter @sideagent/hq seed`; Secret Manager in Phase 7 (D17).
+  HOUSE_RUNNER_API_KEY: z.string().min(1).optional(),
+  HOUSE_RUNNER_MODEL_BACKEND: ModelBackendName.default("vertex"),
+  HOUSE_RUNNER_MODEL: z.string().min(1).optional(),
+  HOUSE_RUNNER_MAX: z.coerce.number().int().positive().default(2),
 });
 export type Config = z.infer<typeof Config>;
 

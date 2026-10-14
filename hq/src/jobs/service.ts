@@ -94,7 +94,7 @@ export function createJobService({
     ]);
 
     const ownerAccount = accounts.owner(agent.ownerId);
-    return db.runTransaction(async (tx) => {
+    const summary = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists) return replayJob(jobId, snap.data() as JobDoc, requestHash);
       requireCredits(await balanceInTx(tx, db, ownerAccount), input.budget, "This job's budget");
@@ -137,6 +137,9 @@ export function createJobService({
       );
       return toSummary(jobId, job);
     });
+    // Idempotent, so a replay that reached the transaction may enqueue it again.
+    if (summary.state === "open") await pipeline.enqueue("dispatch", { jobId });
+    return summary;
   }
 
   /** `posterOwnerId` narrows the board to one owner's jobs (dev command executor, D18). */

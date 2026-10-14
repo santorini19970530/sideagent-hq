@@ -1,3 +1,4 @@
+import { ModelBackendName } from "@sideagent/protocol";
 import { z } from "zod";
 import { createGeminiApiBackend, createVertexBackend } from "./model/genai.ts";
 import { createOllamaBackend } from "./model/ollama.ts";
@@ -13,7 +14,7 @@ const DEFAULT_MODELS = {
 } as const;
 
 export const Config = z.object({
-  SIDEAGENT_MODEL_BACKEND: z.enum(["ollama", "vertex", "gemini-api"]).default("ollama"),
+  SIDEAGENT_MODEL_BACKEND: ModelBackendName.default("ollama"),
   SIDEAGENT_MODEL: z.string().min(1).optional(),
   SIDEAGENT_SANDBOX_IMAGE: z.string().default("sideagent-sandbox-python:dev"),
   // Ollama's own variable; it may omit the scheme, e.g. `0.0.0.0:11434`.

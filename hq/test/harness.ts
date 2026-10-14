@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { JobSpec } from "@sideagent/protocol";
+import type { HouseRunnerDispatcher } from "../src/adapters/dispatch/types.ts";
 import { createAdapters } from "../src/adapters/index.ts";
 import { createApp } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
@@ -41,13 +42,16 @@ export function createFakeSandbox() {
 
 // Runs against the Firestore emulator started by `pnpm test`. Every test creates its own
 // owner and agents, so test files can share the emulator without clearing it.
-export function createHarness() {
+// House runners are off unless a test passes a `dispatcher`.
+export function createHarness({
+  dispatcher = null,
+}: { dispatcher?: HouseRunnerDispatcher | null } = {}) {
   const config = {
     ...loadConfig(process.env),
     BLOB_LOCAL_DIR: mkdtempSync(join(tmpdir(), "sideagent-blobs-")),
   };
   const sandbox = createFakeSandbox();
-  const adapters = createAdapters(config, { sandbox });
+  const adapters = createAdapters(config, { sandbox, dispatcher });
   const clock = { now: new Date() };
   const app = createApp(config, adapters, { now: () => clock.now });
 
