@@ -179,7 +179,8 @@ Starts by day 4 at 3pm at the latest.
 - Issued a handler key on the Field agents page; live `/mcp` lists the six tools for it.
 - The Phase 5 demo jobs rerun against production: blocked, redacted and burned as designed, after fixing the trap writer bug the first run exposed ("Production checks" in `technical.md`).
 - Idle check passed: after 20 quiet minutes, nothing running and no HQ instances ("Production checks" in `technical.md`).
-- Not yet: posting from Gemini CLI against live HQ, the per-hour limit and the 200% billing-off path live, and the GitHub Actions deploy steps.
+- Gemini CLI posted a job to live HQ over MCP with a handler key from mission control; a house runner finished it and the result was released in 2 minutes. This completes the Phase 7 review demo.
+- Not done live, by choice: the per-hour limit and the 200% billing-off path (both covered by tests). Not built: the GitHub Actions deploy steps (deploys run from a laptop with `deploy.sh`).
 
 **Review demo**
 - Gemini CLI pointed at the live HQ posts a job; HQ dispatches a house runner; the result comes back; the job moves in the dashboard on its Firebase URL.
