@@ -9,10 +9,11 @@
 // `ollama:<model>`, `vertex:<model>`, `claude`, `codex`. Vertex uses application default
 // credentials, or GCP_ACCESS_TOKEN when those belong to an account without access, as in
 // infra/experiments. GOOGLE_CLOUD_PROJECT defaults to sideagent-hq.
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { GoogleGenAI } from "@google/genai";
+import type { CodeFile } from "@sideagent/protocol";
 import { CODE_JOBS, type DemoCodeJob } from "../../demo/jobs/code.ts";
 import { createDockerSandbox } from "../../hq/src/sandbox/docker.ts";
 import { createModelBackend, loadConfig } from "../src/config.ts";
@@ -21,7 +22,7 @@ import { createGemmaLoopExecutor } from "../src/executor/gemma-loop.ts";
 import type { Executor } from "../src/executor/types.ts";
 import { createGenAiBackend } from "../src/model/genai.ts";
 import { createDockerTestRunner } from "../src/sandbox/docker.ts";
-import { createWorkspace } from "../src/workspace.ts";
+import { createWorkspace, resolveInside } from "../src/workspace.ts";
 
 const RUN_MINUTES = 10;
 
@@ -36,26 +37,32 @@ const { values } = parseArgs({
   },
 });
 const trials = Number(values.trials);
-const jobs = values.jobs
-  ? CODE_JOBS.filter((j) => values.jobs!.split(",").includes(j.id))
-  : CODE_JOBS;
+if (!Number.isInteger(trials) || trials < 1) throw new Error("--trials must be a positive integer");
+const runners = values.runners.split(",");
+const jobIds = values.jobs?.split(",") ?? CODE_JOBS.map((j) => j.id);
+const unknown = jobIds.filter((id) => !CODE_JOBS.some((j) => j.id === id));
+if (unknown.length) throw new Error(`Unknown --jobs: ${unknown.join(", ")}`);
+const jobs = CODE_JOBS.filter((j) => jobIds.includes(j.id));
 
 const config = loadConfig({ GOOGLE_CLOUD_PROJECT: "sideagent-hq", ...process.env });
 const tests = createDockerTestRunner({ image: config.SIDEAGENT_SANDBOX_IMAGE });
 const checker = createDockerSandbox({ image: config.SIDEAGENT_SANDBOX_IMAGE, timeoutSeconds: 300 });
 
+let vertex: GoogleGenAI["models"] | undefined;
 function vertexModels() {
+  if (vertex) return vertex;
   const token = process.env.GCP_ACCESS_TOKEN;
   const authClient = token && {
     getAccessToken: async () => ({ token }),
     getRequestHeaders: async () => new Headers({ authorization: `Bearer ${token}` }),
   };
-  return new GoogleGenAI({
+  vertex = new GoogleGenAI({
     vertexai: true,
     project: config.GOOGLE_CLOUD_PROJECT!,
     location: config.GOOGLE_CLOUD_LOCATION,
     ...(authClient ? { googleAuthOptions: { authClient: authClient as never } } : {}),
   }).models;
+  return vertex;
 }
 
 /** An executor for `runner`, and the log lines it wrote during the last run. */
@@ -68,7 +75,11 @@ function createRunner(runner: string, job: DemoCodeJob, lines: string[]): Execut
         name: "reference",
         sameOwnerOnly: false,
         async run({ dir }) {
-          for (const f of job.reference_solution) await writeFile(join(dir, f.path), f.content);
+          for (const f of job.reference_solution) {
+            const file = resolveInside(dir, f.path);
+            await mkdir(dirname(file), { recursive: true });
+            await writeFile(file, f.content);
+          }
         },
       };
     case "ollama":
@@ -117,39 +128,44 @@ async function runOnce(job: DemoCodeJob, runner: string): Promise<Run> {
   };
   const lines: string[] = [];
   const executor = createRunner(runner, job, lines);
+  const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
   const workspace = await createWorkspace(view);
   const started = Date.now();
   let error: string | undefined;
+  let seconds: number;
+  let result: CodeFile[];
   try {
-    await executor.run({
-      job: view,
-      dir: workspace.dir,
-      deadline: new Date(Date.now() + RUN_MINUTES * 60_000),
+    await executor
+      .run({ job: view, dir: workspace.dir, deadline: new Date(Date.now() + RUN_MINUTES * 60_000) })
+      .catch((err) => (error = message(err)));
+    seconds = (Date.now() - started) / 1000;
+    result = await workspace.collect().catch((err) => {
+      error ??= message(err);
+      return [];
     });
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+  } finally {
+    await workspace.dispose();
   }
-  const seconds = (Date.now() - started) / 1000;
-  const result = await workspace.collect().catch(() => []);
-  await workspace.dispose();
 
-  const total = job.public_tests.length + job.hidden_tests.length;
+  // Unscored runs count as 0 of 0, so they never show as fully passed.
   let passed = 0;
-  let checkTotal = 0;
+  let total = 0;
   if (result.length > 0) {
-    const outcome = await checker.runChecks({
-      jobId: job.id,
-      checkId: `${runner}-${started}`,
-      runtime: "python",
-      result,
-      publicTests: job.public_tests,
-      hiddenTests: job.hidden_tests,
-      trapTests: [],
-    });
-    if (outcome.kind === "scored") {
-      passed = outcome.summary.passed;
-      checkTotal = outcome.summary.total;
-    } else error ??= outcome.error.reason;
+    try {
+      const outcome = await checker.runChecks({
+        jobId: job.id,
+        checkId: `${runner}-${started}`,
+        runtime: "python",
+        result,
+        publicTests: job.public_tests,
+        hiddenTests: job.hidden_tests,
+        trapTests: [],
+      });
+      if (outcome.kind === "scored") ({ passed, total } = outcome.summary);
+      else error ??= outcome.error.reason;
+    } catch (err) {
+      error ??= `check failed: ${message(err)}`;
+    }
   } else error ??= "no result files";
 
   const submitted = lines
@@ -159,7 +175,7 @@ async function runOnce(job: DemoCodeJob, runner: string): Promise<Run> {
     job: job.id,
     runner,
     passed,
-    total: checkTotal || total,
+    total,
     seconds,
     ...(submitted ? { steps: Number(submitted[1]), tokens: Number(submitted[2]) } : {}),
     ...(error ? { error } : {}),
@@ -173,7 +189,7 @@ const median = (xs: number[]) => {
 
 const runs: Run[] = [];
 for (const job of jobs) {
-  for (const runner of values.runners.split(",")) {
+  for (const runner of runners) {
     for (let t = 1; t <= (runner === "reference" ? 1 : trials); t++) {
       const run = await runOnce(job, runner);
       runs.push(run);
@@ -189,9 +205,9 @@ for (const job of jobs) {
 console.log("| Job | Runner | Fully passed | Tests passed | Median time | Median steps / tokens |");
 console.log("|---|---|---|---|---|---|");
 for (const job of jobs) {
-  for (const runner of values.runners.split(",")) {
+  for (const runner of runners) {
     const rs = runs.filter((r) => r.job === job.id && r.runner === runner);
-    const full = rs.filter((r) => r.passed === r.total && !r.error).length;
+    const full = rs.filter((r) => r.total > 0 && r.passed === r.total && !r.error).length;
     const tests = rs.map((r) => `${r.passed}/${r.total}`).join(", ");
     const steps = rs.flatMap((r) => (r.steps ? [r.steps] : []));
     const tokens = rs.flatMap((r) => (r.tokens ? [r.tokens] : []));
