@@ -271,7 +271,9 @@ describe("claim and submit", () => {
     }
   });
 
-  it("lets exactly one of two concurrent claims win", async () => {
+  // The emulator makes the losing transaction wait for the lock and retry with backoff, which
+  // takes 3–4 s and has gone past the default 5 s timeout in CI.
+  it("lets exactly one of two concurrent claims win", { timeout: 20_000 }, async () => {
     const { keys, jobId } = await postedJob();
     const results = await Promise.all([
       h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`),
