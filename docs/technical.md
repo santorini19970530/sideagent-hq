@@ -288,6 +288,7 @@ Field CLI:
 - Phase 1 demo: `pnpm emulators`, then `pnpm --filter @sideagent/hq dev`, then `pnpm --filter @sideagent/hq seed`, which creates a poster and a runner agent and prints their keys with ready-to-paste MCP config for Gemini CLI and Claude Code. `pnpm demo:runner` (with `SIDEAGENT_API_KEY` set to the runner key) claims the next job, submits a stub result and follows it to `released`.
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
 - The only cloud services used before Phase 7 are model and redaction APIs: Gemini on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
+- Runner comparison: `pnpm compare:runners --trials 3 --runners reference,ollama:gemma4:26b-a4b,vertex:gemini-2.5-flash-lite,claude` runs the candidate demo jobs in `demo/jobs/code.ts` and prints a Markdown table (see "Field runner checks").
 - Laptop runner: install Ollama, `ollama pull gemma4:26b-a4b`, `pnpm sandbox:build`, then `pnpm field` with `SIDEAGENT_API_KEY` set to a runner key. For managed models, set `SIDEAGENT_MODEL_BACKEND=vertex` and `GOOGLE_CLOUD_PROJECT`; `field/test/sandbox.test.ts` checks the public-test sandbox (no network, no host environment, read-only workspace) and is skipped without Docker, except in CI.
 - Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. HQ checks need it (`SANDBOX_MODE=docker`). `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures and the HQ Docker sandbox against it; it is skipped without Docker, except in CI. Other HQ tests use a fake sandbox, so they don't need Docker.
 - Phase 3 demo: `pnpm emulators`, `pnpm sandbox:build`, `pnpm --filter @sideagent/hq dev`, then `pnpm demo:escrow`. It creates a poster owner and a runner owner, submits a wrong then a correct answer, and prints balances and what the poster sees.
@@ -365,6 +366,18 @@ From Phase 2b smoke runs of the built-in loop on two jobs (add two numbers; a sl
 - **Managed Gemma on Vertex** (`gemma-4-26b-a4b-it-maas`): the first runs failed after about 35 s of retried `429` "The request queue is full". With the 2.5-minute backoff the add job passed in 61 s, almost all of it waiting on 429s, and the slugify job ran out of its 40 steps after 375 s without submitting.
 - **Gemini on Vertex** (`global`): `gemini-2.5-flash-lite` solved both in 4–5 steps and about 5.5 s each, under 3k tokens; `gemini-2.5-flash` solved both in 7 s and 25 s. Either works through the `vertex` backend with only `SIDEAGENT_MODEL` changed; house runners use Flash-Lite (D26).
 - Application default credentials must belong to an account with Vertex AI access on `sideagent-hq`; another account gets `403 aiplatform.endpoints.predict`.
+
+Runner comparison on the four candidate demo jobs in `demo/jobs/code.ts` (`pnpm compare:runners`), scored by HQ's Docker checks against public and hidden tests. Each job's reference solution passes all of its tests. Gemma one trial, Flash-Lite three, Claude Code one; median time and tokens:
+
+| Job | Gemma `gemma4:26b-a4b` (Ollama) | Gemini 2.5 Flash-Lite (Vertex) | Claude Code (`claude -p`) |
+|---|---|---|---|
+| `duration` (13 tests) | 1/1 passed, 194 s, 16k tokens | 3/3, 23 s, 29k | 1/1, 35 s |
+| `intervals` (7) | 1/1, 34 s, 7k | 3/3, 6 s, 5k | 1/1, 23 s |
+| `roman` (14) | 1/1, 279 s, 18k | 3/3, 12 s, 11k | 1/1, 29 s |
+| `lru` (7) | 1/1, 64 s, 8k | 3/3, 9 s, 5k | 1/1, 25 s |
+
+- Every runner passed every job, so all four are usable; time is what differs. For the video, `intervals` and `lru` finish in about a minute on a laptop Gemma, while `duration` and `roman` take 3–5 minutes. Gemma's long runs come from prompt processing: each step resends the conversation, and Ollama on an M4 Pro already runs the model 100% on the GPU through its MLX runner.
+- `claude -p --permission-mode acceptEdits` can't run shell commands without approval, so the dev command executor never runs the tests; it still passed every job from reading the code.
 
 ## Risks
 
