@@ -1,21 +1,47 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { apiError, type CodeFile, type JobSummary } from "@sideagent/protocol";
-import { describe, expect, it, vi } from "vitest";
+import { apiError, type CodeFile, type JobStatus, type JobSummary } from "@sideagent/protocol";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Executor } from "../src/executor/types.ts";
 import { HqApiError, type HqClient } from "../src/hq-client.ts";
 import { runJob, runLoop } from "../src/poll.ts";
 import { claimOutput, runnerJob } from "./fixtures.ts";
 
+function status(state: JobStatus["state"], overrides: Partial<JobStatus> = {}): JobStatus {
+  const { spec: _, public_tests: __, ...summary } = runnerJob();
+  return { ...summary, state, role: "runner", events: [], ...overrides };
+}
+
+const failedCheck = (attemptsLeft: number) =>
+  status("claimed", {
+    claim: { deadline: new Date(Date.now() + 600_000).toISOString(), attempts_left: attemptsLeft },
+    last_check: {
+      submission_id: "sub_1",
+      outcome: "failed",
+      summary: { passed: 2, total: 3, categories: {} },
+    },
+  });
+
 function fakeHq() {
   const submitted: { jobId: string; result: CodeFile[]; key: string }[] = [];
+  let attemptsLeft = 3;
   const hq = {
     nextJob: vi.fn<HqClient["nextJob"]>(async () => null),
-    claimJob: vi.fn<HqClient["claimJob"]>(async () => claimOutput()),
+    claimJob: vi.fn<HqClient["claimJob"]>(async () => ({
+      ...claimOutput(),
+      attempts_left: attemptsLeft,
+    })),
     submitResult: vi.fn<HqClient["submitResult"]>(async (jobId, result, key) => {
       submitted.push({ jobId, result, key });
-      return { job_id: jobId, submission_id: "sub_1", state: "submitted", attempts_left: 2 };
+      attemptsLeft -= 1;
+      return {
+        job_id: jobId,
+        submission_id: "sub_1",
+        state: "submitted",
+        attempts_left: attemptsLeft,
+      };
     }),
+    getStatus: vi.fn<HqClient["getStatus"]>(async () => status("released")),
   } satisfies HqClient;
   return { hq, submitted };
 }
@@ -29,6 +55,10 @@ const writesSolution: Executor = {
 };
 
 const quiet = () => {};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("runJob", () => {
   it("claims, runs the executor in the workspace and submits its files", async () => {
@@ -45,7 +75,62 @@ describe("runJob", () => {
         key: expect.stringMatching(/\/3$/),
       },
     ]);
-    expect(out.state).toBe("submitted");
+    expect(out.state).toBe("released");
+  });
+
+  it("waits for the check, then tries again under the same claim after a fail", async () => {
+    const { hq, submitted } = fakeHq();
+    hq.getStatus
+      .mockResolvedValueOnce(status("checking"))
+      .mockResolvedValueOnce(failedCheck(2))
+      .mockResolvedValueOnce(status("released"));
+    const run = vi.spyOn(writesSolution, "run");
+    const out = await runJob({ hq, executor: writesSolution, log: quiet }, "job_1", undefined, {
+      pollMs: 1,
+    });
+
+    expect(out.state).toBe("released");
+    expect(hq.claimJob).toHaveBeenCalledTimes(2);
+    expect(submitted.map((s) => s.key.split("/")[1])).toEqual(["3", "2"]);
+    expect(run.mock.calls[0]?.[0].previousCheck).toBeUndefined();
+    expect(run.mock.calls[1]?.[0].previousCheck?.summary?.passed).toBe(2);
+  });
+
+  it("does not pass on a check from an earlier submission", async () => {
+    const { hq } = fakeHq();
+    const stale = failedCheck(2);
+    stale.last_check = { ...stale.last_check!, submission_id: "sub_0" };
+    hq.getStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce(status("released"));
+    const run = vi.spyOn(writesSolution, "run");
+    await runJob({ hq, executor: writesSolution, log: quiet }, "job_1");
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1]?.[0].previousCheck).toBeUndefined();
+  });
+
+  it("stops once the job reopens with no attempts left", async () => {
+    const { hq, submitted } = fakeHq();
+    hq.getStatus
+      .mockResolvedValueOnce(failedCheck(2))
+      .mockResolvedValueOnce(failedCheck(1))
+      .mockResolvedValueOnce(status("open", { role: "observer" }));
+    const out = await runJob({ hq, executor: writesSolution, log: quiet }, "job_1");
+
+    expect(out.state).toBe("open");
+    expect(submitted).toHaveLength(3);
+    expect(hq.claimJob).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops waiting when the check outlives the claim", async () => {
+    const { hq, submitted } = fakeHq();
+    hq.claimJob.mockResolvedValue(claimOutput(runnerJob(), 50));
+    hq.getStatus.mockResolvedValue(status("checking"));
+    const out = await runJob({ hq, executor: writesSolution, log: quiet }, "job_1", undefined, {
+      pollMs: 20,
+    });
+
+    expect(out.state).toBe("checking");
+    expect(submitted).toHaveLength(1);
   });
 
   it("asks HQ for same-owner claims when the executor requires it", async () => {

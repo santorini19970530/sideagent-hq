@@ -105,6 +105,29 @@ describe("gemma loop executor", () => {
     expect(requests[0]?.system).toBe(SYSTEM_PROMPT);
   });
 
+  it("tells a retry how the previous result scored, with counts only", async () => {
+    const { model, requests } = scriptedModel([
+      [call("write_file", { path: "solution.py", content: SOLUTION })],
+      [call("submit")],
+    ]);
+    const executor = createGemmaLoopExecutor({ model, tests: passingTests(), log: quiet });
+    await executor.run({
+      job: runnerJob(),
+      dir: ws.dir,
+      deadline: inAMinute(),
+      previousCheck: {
+        submission_id: "sub_1",
+        outcome: "failed",
+        summary: { passed: 2, total: 3, categories: { CATEGORY_MARKER: { passed: 0, total: 1 } } },
+        reason: "REASON_MARKER",
+      },
+    });
+    const sent = JSON.stringify(requests[0]?.messages);
+    expect(sent).toContain("passed only 2 of 3 tests");
+    expect(sent).not.toContain("CATEGORY_MARKER");
+    expect(sent).not.toContain("REASON_MARKER");
+  });
+
   it("refuses writes to the inputs, hidden files and paths outside the workspace", async () => {
     const { model, requests } = scriptedModel([
       [

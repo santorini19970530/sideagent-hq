@@ -2,6 +2,7 @@ import {
   ApiError,
   apiError,
   ClaimJobOutput,
+  JobStatus,
   JobSummary,
   SubmitResultOutput,
   type CodeFile,
@@ -90,6 +91,9 @@ export function createHqClient({ url, apiKey, fetch: fetchFn = fetch }: HqClient
     claimJob(jobId: string, { sameOwner }: { sameOwner: boolean }) {
       const params = query({ same_owner: sameOwner && "true" });
       return call(ClaimJobOutput, "POST", `${jobPath(jobId)}/claim${params}`);
+    },
+    getStatus(jobId: string, signal?: AbortSignal) {
+      return call(JobStatus, "GET", jobPath(jobId), { signal });
     },
     submitResult(jobId: string, result: CodeFile[], idempotencyKey: string) {
       return call(SubmitResultOutput, "POST", `${jobPath(jobId)}/submissions`, {

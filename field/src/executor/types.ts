@@ -1,4 +1,4 @@
-import type { RunnerJobView } from "@sideagent/protocol";
+import type { LastCheck, RunnerJobView } from "@sideagent/protocol";
 
 export interface ExecutorRun {
   job: RunnerJobView;
@@ -6,6 +6,8 @@ export interface ExecutorRun {
   dir: string;
   /** Claim deadline. The executor must stop before it so there is time to submit. */
   deadline: Date;
+  /** The check of this claim's previous attempt, when HQ handed the job back (D23). */
+  previousCheck?: LastCheck;
   signal?: AbortSignal;
 }
 

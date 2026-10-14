@@ -1,6 +1,12 @@
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative } from "node:path";
-import { CodeFile, LIMITS, type RunnerJobView, type Runtime } from "@sideagent/protocol";
+import {
+  CodeFile,
+  LIMITS,
+  type LastCheck,
+  type RunnerJobView,
+  type Runtime,
+} from "@sideagent/protocol";
 import { z } from "zod";
 import type {
   Message,
@@ -34,8 +40,17 @@ export const SYSTEM_PROMPT = [
   `Never edit ${SPEC_FILE} or the tests. Python jobs may use the standard library and pytest only.`,
 ].join("\n");
 
-export function startMessage(runtime: Runtime | undefined): string {
-  return `A job is ready in the workspace${runtime ? ` (runtime: ${runtime})` : ""}. Start by reading ${SPEC_FILE}.`;
+export function startMessage(runtime: Runtime | undefined, previousCheck?: LastCheck): string {
+  const start = `A job is ready in the workspace${runtime ? ` (runtime: ${runtime})` : ""}. Start by reading ${SPEC_FILE}.`;
+  return previousCheck ? `${start} ${retryNote(previousCheck)}` : start;
+}
+
+// Counts only: category names and the rejection reason stay out of the prompt.
+function retryNote({ summary }: LastCheck): string {
+  const failed = summary
+    ? `passed only ${summary.passed} of ${summary.total} tests, including hidden tests you cannot see`
+    : "was rejected by the checker before any test ran";
+  return `Your previous result for this job ${failed}. Re-read the spec for cases the public tests miss.`;
 }
 
 const NUDGE =
@@ -92,7 +107,7 @@ async function runLoop(
     maxTokens = DEFAULT_MAX_TOKENS,
     log = console.log,
   }: GemmaLoopOptions,
-  { job, dir, deadline, signal }: ExecutorRun,
+  { job, dir, deadline, previousCheck, signal }: ExecutorRun,
 ): Promise<void> {
   const timeLeft = deadline.getTime() - Date.now() - SUBMIT_MARGIN_MS;
   if (timeLeft <= 0) throw new Error("No time left before the claim deadline");
@@ -111,6 +126,7 @@ async function runLoop(
     await solve(
       { model, tests, maxSteps, maxTokens, log },
       job,
+      startMessage(job.runtime, previousCheck),
       dir,
       stop.signal,
       () => stopReason,
@@ -124,6 +140,7 @@ async function runLoop(
 async function solve(
   { model, tests, maxSteps, maxTokens, log }: Required<GemmaLoopOptions>,
   job: RunnerJobView,
+  start: string,
   dir: string,
   stop: AbortSignal,
   stopReason: () => string,
@@ -139,7 +156,7 @@ async function solve(
   };
 
   const tools = createTools(job, dir, tests, stop);
-  const messages: Message[] = [{ role: "user", text: startMessage(job.runtime) }];
+  const messages: Message[] = [{ role: "user", text: start }];
   let tokens = 0;
   for (let step = 1; step <= maxSteps; step++) {
     if (tokens > maxTokens)
