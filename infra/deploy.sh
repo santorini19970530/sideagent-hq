@@ -147,6 +147,9 @@ if want control; then
     NUXT_PUBLIC_FIREBASE_API_KEY="$FIREBASE_WEB_API_KEY" \
     NUXT_PUBLIC_USE_EMULATORS=false \
     "${PNPM[@]}" --filter @sideagent/control generate
+  # Firebase serves only folders inside the directory that holds firebase.json (infra/).
+  rm -rf infra/.hosting
+  cp -R control/.output/public infra/.hosting
   "${PNPM[@]}" exec firebase deploy --only hosting,firestore:rules,firestore:indexes \
     --project "$PROJECT" --config infra/firebase.json --non-interactive
   SUMMARY+=("control    https://$PROJECT.web.app (HQ $hq_url)")

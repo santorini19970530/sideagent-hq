@@ -14,3 +14,4 @@ dist/
 *.tfvars
 !*.tfvars.example
 control/dist
+infra/.hosting/
