@@ -51,7 +51,11 @@ resource "google_project_iam_member" "this" {
 }
 
 resource "google_cloud_tasks_queue_iam_member" "hq_enqueuer" {
-  name     = google_cloud_tasks_queue.pipeline.name
+  for_each = {
+    pipeline = google_cloud_tasks_queue.pipeline.name
+    sandbox  = google_cloud_tasks_queue.sandbox.name
+  }
+  name     = each.value
   location = var.region
   role     = "roles/cloudtasks.enqueuer"
   member   = "serviceAccount:${local.sa.hq}"

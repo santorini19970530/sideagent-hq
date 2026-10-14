@@ -59,8 +59,10 @@ export function createCloudRunJobSandbox({
       if (bundle.runtime !== "python") throw new Error(`No sandbox for runtime ${bundle.runtime}`);
       const prefix = `${bundle.jobId}/${bundle.checkId}`;
       const files = checkBundleFiles(bundle);
-      // A retried check reuses its folder; clear what an earlier attempt left.
-      await Promise.all([input.deletePrefix(prefix), output.deletePrefix(prefix)]);
+      // Sandbox steps run one at a time (TASKS_SANDBOX_QUEUE), so nothing else should be in the
+      // buckets: clearing them leaves this execution only its own bundle to see, even if an
+      // earlier cleanup failed, and drops what an earlier attempt of this check left.
+      await Promise.all([input.clear(), output.clear()]);
       // Folder markers, so the mounts list the folders whether or not they infer them.
       const dirs = new Set(parentDirs(`${prefix}/result/x`));
       for (const f of files) for (const d of parentDirs(`${prefix}/${f.path}`)) dirs.add(d);

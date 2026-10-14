@@ -151,10 +151,12 @@ function pipelineRunner(
 ): PipelineRunner {
   if (config.PIPELINE_MODE === "inline") return createInlinePipeline(steps);
   const mode = "PIPELINE_MODE=cloud-tasks";
-  const queue = required(config, "TASKS_QUEUE", mode);
+  const queuePath = (queue: string) =>
+    `projects/${config.GCP_PROJECT}/locations/${config.GCP_REGION}/queues/${queue}`;
   return createCloudTasksPipeline({
     client: gcp.tasks ?? new CloudTasksClient(),
-    queue: `projects/${config.GCP_PROJECT}/locations/${config.GCP_REGION}/queues/${queue}`,
+    queue: queuePath(required(config, "TASKS_QUEUE", mode)),
+    sandboxQueue: queuePath(required(config, "TASKS_SANDBOX_QUEUE", mode)),
     hqUrl: required(config, "HQ_URL", mode),
     serviceAccountEmail: required(config, "TASKS_SA_EMAIL", mode),
   });

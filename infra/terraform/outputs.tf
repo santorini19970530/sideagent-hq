@@ -27,8 +27,11 @@ output "kms_key" {
   value = google_kms_crypto_key.vault.id
 }
 
-output "tasks_queue" {
-  value = google_cloud_tasks_queue.pipeline.name
+output "tasks_queues" {
+  value = {
+    pipeline = google_cloud_tasks_queue.pipeline.name
+    sandbox  = google_cloud_tasks_queue.sandbox.name
+  }
 }
 
 output "jobs" {

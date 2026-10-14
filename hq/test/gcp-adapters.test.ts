@@ -135,6 +135,9 @@ function fakeBucket(): PrefixBlobStore & { objects: Map<string, string> } {
     async deletePrefix(prefix) {
       for (const key of [...objects.keys()]) if (key.startsWith(`${prefix}/`)) objects.delete(key);
     },
+    async clear() {
+      objects.clear();
+    },
   };
 }
 
@@ -168,8 +171,9 @@ async function runSandbox(
 ) {
   const input = fakeBucket();
   const output = fakeBucket();
-  // Left by an earlier attempt of the same check.
+  // Left by an earlier attempt of the same check, and by another check whose cleanup failed.
   output.objects.set("job-1/sub-1/summary.json", JSON.stringify(SUMMARY));
+  input.objects.set("job-9/sub-9/tests/hidden/test_other.py", "# OTHER_HIDDEN");
   const seen: { request?: unknown; input?: Map<string, string> } = {};
   const jobs: JobsClient = {
     async runJob(request) {
@@ -238,6 +242,14 @@ describe("cloud-run-job sandbox", () => {
     // The check's folders are gone afterwards; hidden tests don't linger in the bucket.
     expect([...run.input.objects.keys()]).toEqual(["job-1/"]);
     expect([...run.output.objects.keys()]).toEqual(["job-1/"]);
+  });
+
+  it("shows the execution only its own bundle", async () => {
+    const run = await runSandbox({ "summary.json": JSON.stringify(SUMMARY) });
+    await run.outcome;
+    const keys = [...run.seen.input!.keys()];
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((k) => k.startsWith("job-1/"))).toBe(true);
   });
 
   it("reads a rejection from error.json, though the execution failed", async () => {

@@ -7,6 +7,8 @@ export interface PrefixBlobStore extends BlobStore {
   putDir(dir: string): Promise<void>;
   /** Deletes every object under `<prefix>/`. */
   deletePrefix(prefix: string): Promise<void>;
+  /** Deletes every object in the bucket. */
+  clear(): Promise<void>;
 }
 
 function objectName(key: string): string {
@@ -42,6 +44,9 @@ export function createGcsBlobStore(bucket: Bucket): PrefixBlobStore {
     },
     async deletePrefix(prefix) {
       await bucket.deleteFiles({ prefix: `${objectName(prefix)}/`, force: true });
+    },
+    async clear() {
+      await bucket.deleteFiles({ force: true });
     },
   };
 }

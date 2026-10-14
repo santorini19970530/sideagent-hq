@@ -27,15 +27,23 @@ const verifier: IdTokenVerifier = {
 const token = (claims: { aud?: string; email?: string; verified?: boolean } = {}) =>
   JSON.stringify({ aud: HQ_URL, email: TASKS_SA, ...claims });
 
-type Task = { url: string; body: string; audience: string; email: string; deadline: unknown };
+type Task = {
+  queue: string;
+  url: string;
+  body: string;
+  audience: string;
+  email: string;
+  deadline: unknown;
+};
+const QUEUES = "projects/demo-sideagent/locations/us-west1/queues";
 
 function fakeTasks() {
   const tasks: Task[] = [];
   const client: TasksClient = {
     async createTask({ parent, task }) {
-      expect(parent).toBe("projects/demo-sideagent/locations/us-west1/queues/sideagent-pipeline");
       const req = task!.httpRequest!;
       tasks.push({
+        queue: parent!,
         url: req.url!,
         body: Buffer.from(req.body as Uint8Array).toString("utf8"),
         audience: req.oidcToken!.audience!,
@@ -55,6 +63,7 @@ function cloudHarness() {
       PIPELINE_MODE: "cloud-tasks",
       HQ_URL,
       TASKS_QUEUE: "sideagent-pipeline",
+      TASKS_SANDBOX_QUEUE: "sideagent-sandbox",
       TASKS_SA_EMAIL: TASKS_SA,
     },
     gcp: { tasks: fake.client, idTokens: verifier },
@@ -90,13 +99,14 @@ describe("cloud-tasks pipeline", () => {
         deadline: { seconds: 1800 },
       });
       expect(JSON.parse(task.body)).toEqual({ jobId });
-      ran.push(new URL(task.url).pathname);
+      ran.push(`${task.queue.slice(QUEUES.length + 1)} ${new URL(task.url).pathname}`);
       expect((await h.deliver(task)).status).toBe(200);
     }
+    // Review runs the sandbox, so it waits its turn on the one-at-a-time queue.
     expect(ran).toEqual([
-      "/internal/steps/screen",
-      "/internal/steps/review",
-      "/internal/steps/dispatch",
+      "sideagent-pipeline /internal/steps/screen",
+      "sideagent-sandbox /internal/steps/review",
+      "sideagent-pipeline /internal/steps/dispatch",
     ]);
     const status = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     expect(status.state).toBe("open");
@@ -148,8 +158,11 @@ describe("cloud-tasks pipeline", () => {
         { model: createFakeModel() },
       );
     expect(start({ PIPELINE_MODE: "cloud-tasks", HQ_URL, TASKS_QUEUE: "q" })).toThrow(
-      "PIPELINE_MODE=cloud-tasks needs TASKS_SA_EMAIL",
+      "PIPELINE_MODE=cloud-tasks needs TASKS_SANDBOX_QUEUE",
     );
+    expect(
+      start({ PIPELINE_MODE: "cloud-tasks", HQ_URL, TASKS_QUEUE: "q", TASKS_SANDBOX_QUEUE: "s" }),
+    ).toThrow("PIPELINE_MODE=cloud-tasks needs TASKS_SA_EMAIL");
     expect(start({ SANDBOX_MODE: "cloud-run-job" })).toThrow(
       "SANDBOX_MODE=cloud-run-job needs SANDBOX_JOB",
     );

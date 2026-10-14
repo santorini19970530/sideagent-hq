@@ -166,7 +166,7 @@ Behind the `Redactor` interface, which only finds values: a pattern matcher (ema
 - **Input:** HQ writes the bundle (result code, public tests, hidden tests, trap tests) to `gs://<input-bucket>/<jobId>/<checkId>/`, mounted read-only at `/job`.
 - **Output:** `run_checks.py` writes `summary.json` (`passed`, `total`, per-category counts) and, when requested, `mutants.json` (`killed`, `total`) to a mounted output bucket. Only HQ reads them.
 - **Isolation:** dedicated service account with only object read on the input bucket and object write on the output bucket. Direct VPC egress (all traffic) to a subnet with no Cloud NAT, so no internet. Timeouts per check; capped number of mutants.
-- **Known gap (open, Phase 7):** the job mounts the whole input and output buckets, and only the arguments pick a check's folder. A result written to look around could read the hidden tests of another check running at the same time, or write into its output folder. Fixes, not built yet: run sandbox steps one at a time on their own queue and clear both buckets before each run, or drop the mounts and pass each execution signed URLs for its own bundle and output.
+- **One check at a time:** the job mounts the whole input and output buckets, and only the arguments pick a check's folder, so two checks at once could read each other's hidden tests or write into each other's output. The steps that run the sandbox (`review`, `check`) go to their own Cloud Tasks queue, `sideagent-sandbox` (`TASKS_SANDBOX_QUEUE`), which dispatches one task at a time, and each run clears both buckets before it writes its bundle. Checks wait for each other; signed URLs per execution instead of mounts would let them run in parallel (roadmap).
 - **Known gap:** with Private Google Access, code in the sandbox could reach Google APIs using the sandbox service account. A VPC Service Controls perimeter closes this; it is on the roadmap, not in the prototype.
 - **On Cloud Run:** the input bucket is mounted read-only at `/mnt/in` and the output bucket at `/mnt/out`; HQ starts each execution with `check --job /mnt/in/<jobId>/<checkId> --out /mnt/out/<jobId>/<checkId>` (`run` takes `--work` the same way). Cloud Run doesn't give HQ the exit code, so a result counts as scored only when the execution succeeded and `summary.json` exists; `error.json` means rejected; anything else is a sandbox failure and the step is retried. Without the success check, a result could write its own `summary.json` and kill the checker.
 - **One image, two commands.** `images/python-sandbox` (Python 3.13, hash-pinned pytest, uid 10001) serves HQ checks and laptop runners. Jobs can use the standard library and pytest only (D22).
@@ -243,7 +243,7 @@ The document shapes mission control reads (`JobView`, `JobEventView`, `AgentView
 | Cloud Run service | `sideagent-hq` | Public; API-key auth in app; minimum 0 instances |
 | Cloud Run job | `sideagent-sandbox-python` | Started by HQ |
 | Cloud Run jobs | `house-runner-honest`, `house-runner-double-agent` | Started by HQ per job; no idle cost |
-| Cloud Tasks queue | `sideagent-pipeline` | Retries with backoff |
+| Cloud Tasks queues | `sideagent-pipeline`, `sideagent-sandbox` | Retries with backoff, 5 attempts; `sideagent-sandbox` takes `review` and `check` one at a time |
 | Firestore | default database | Native mode |
 | Buckets | `<project>-jobs`, `<project>-sandbox-in`, `<project>-sandbox-out` | Lifecycle rule deletes sandbox objects after 1 day |
 | KMS | key ring `sideagent`, key `vault` | |
@@ -276,7 +276,7 @@ HQ:
 |---|---|
 | `PORT` | HTTP port (default `8080`) |
 | `GCP_PROJECT`, `GCP_REGION` | Project and region (`sideagent-hq`, `us-west1`; D25) |
-| `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup: HQ's own URL is the task target and OIDC audience, and `/internal/steps/:step` accepts only tokens for it from `TASKS_SA_EMAIL` |
+| `TASKS_QUEUE`, `TASKS_SANDBOX_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup: sandbox steps go to `TASKS_SANDBOX_QUEUE`; HQ's own URL is the task target and OIDC audience, and `/internal/steps/:step` accepts only tokens for it from `TASKS_SA_EMAIL` |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage. These and the other GCP variables are set by Terraform; each cloud mode fails at startup naming any that is missing |
 | `HOUSE_RUNNER_JOB`, `HOUSE_RUNNER_DOUBLE_AGENT_JOB` | Cloud Run Jobs for `HOUSE_RUNNERS=cloud-run-job` |
 | `SANDBOX_IMAGE` | Sandbox image for `SANDBOX_MODE=docker` (default `sideagent-sandbox-python:dev`) |
@@ -439,7 +439,7 @@ From Phase 5 runs against Gemini on Vertex AI (`sideagent-hq`, `global`), 2026-1
 | Sandbox and house-runner cold starts slow the demo | Jobs are async anyway; pre-warm by running one job before recording |
 | Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; the Terraform and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
 | Mutation testing too slow | Cap mutants; run strength scoring only in `review`, not on every check |
-| Concurrent sandbox checks share the bucket mounts, so a result could read another check's hidden tests (Phase 7) | Open: one-at-a-time sandbox queue or signed URLs per execution ("Test sandbox") |
+| Sandbox checks share the bucket mounts, so a result could read another check's hidden tests | Sandbox steps run one at a time on `sideagent-sandbox` and clear both buckets first ("Test sandbox"); checks queue behind each other in the demo |
 | House-runner tests run in the runner's container, so test code could read the house runner's key from `/proc` | Accepted for the prototype (D20): one job per container, a key for a house owner, an account that can only call Vertex AI |
 | Sandbox can reach Google APIs and the metadata server (confirmed on day 1) | Sandbox service account has only its two bucket roles; VPC Service Controls later |
 | A result attacks the checker from inside the test process | Scoring defences in `run_checks.py`; trap checks and stakes; separate sandbox user per category later |

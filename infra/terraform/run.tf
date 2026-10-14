@@ -27,6 +27,7 @@ locals {
     CONTROL_ORIGIN                = var.control_origin
     PIPELINE_MODE                 = "cloud-tasks"
     TASKS_QUEUE                   = google_cloud_tasks_queue.pipeline.name
+    TASKS_SANDBOX_QUEUE           = google_cloud_tasks_queue.sandbox.name
     TASKS_SA_EMAIL                = local.sa.tasks
     SANDBOX_MODE                  = "cloud-run-job"
     SANDBOX_JOB                   = "sideagent-sandbox-python"

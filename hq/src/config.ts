@@ -15,6 +15,8 @@ const Config = z.object({
     .optional(),
   // `PIPELINE_MODE=cloud-tasks`: the queue, and the account whose OIDC token tasks carry.
   TASKS_QUEUE: z.string().min(1).optional(),
+  // Steps that run the sandbox go here, one at a time: checks share the bucket mounts.
+  TASKS_SANDBOX_QUEUE: z.string().min(1).optional(),
   TASKS_SA_EMAIL: z.string().min(1).optional(),
   // `SANDBOX_MODE=cloud-run-job`: the job and the buckets mounted at /mnt/in and /mnt/out.
   SANDBOX_JOB: z.string().min(1).optional(),
