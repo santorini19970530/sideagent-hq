@@ -10,6 +10,7 @@ import type { Executor } from "./executor/types.ts";
 import { createHqClient } from "./hq-client.ts";
 import { runJob, runLoop } from "./poll.ts";
 import { createDockerTestRunner } from "./sandbox/docker.ts";
+import { createProcessTestRunner } from "./sandbox/process.ts";
 
 const USAGE = `Usage: sideagent <command>
 
@@ -35,6 +36,10 @@ Environment:
   GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION  Vertex AI project and location (default global)
   GEMINI_API_KEY       Key for the gemini-api backend
   SIDEAGENT_SANDBOX_IMAGE  Image for public tests (default sideagent-sandbox-python:dev)
+  SIDEAGENT_TEST_RUNNER    docker (default) or process: public tests as a child process with
+                           no sandbox; only for house-runner containers, where the container
+                           is the sandbox
+  SIDEAGENT_RUN_CHECKS     run_checks.py for the process runner (default /opt/sideagent/run_checks.py)
 
 Options:
   --version Print the version
@@ -85,7 +90,10 @@ async function field(argv: string[]) {
     const config = parsed.data;
     executor = createGemmaLoopExecutor({
       model: createModelBackend(config, values.model),
-      tests: createDockerTestRunner({ image: config.SIDEAGENT_SANDBOX_IMAGE }),
+      tests:
+        config.SIDEAGENT_TEST_RUNNER === "process"
+          ? createProcessTestRunner({ runChecks: config.SIDEAGENT_RUN_CHECKS })
+          : createDockerTestRunner({ image: config.SIDEAGENT_SANDBOX_IMAGE }),
       maxTokens: config.SIDEAGENT_MAX_TOKENS,
     });
   } else {

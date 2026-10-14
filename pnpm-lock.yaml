@@ -233,12 +233,30 @@ importers:
       '@sideagent/protocol':
         specifier: workspace:*
         version: link:../protocol
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       zod:
         specifier: ^4.6.6
         version: 4.6.6
 
   hq:
     dependencies:
+      '@google-cloud/dlp':
+        specifier: ^7.2.0
+        version: 7.2.0(supports-color@7.2.0)
+      '@google-cloud/kms':
+        specifier: ^6.3.0
+        version: 6.3.0(supports-color@7.2.0)
+      '@google-cloud/run':
+        specifier: ^4.2.0
+        version: 4.2.0(supports-color@7.2.0)
+      '@google-cloud/storage':
+        specifier: ^8.4.0
+        version: 8.4.0(supports-color@7.2.0)
+      '@google-cloud/tasks':
+        specifier: ^7.3.0
+        version: 7.3.0(supports-color@7.2.0)
       '@google/genai':
         specifier: ^2.29.1
         version: 2.29.1(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.6))(supports-color@7.2.0)
@@ -254,9 +272,15 @@ importers:
       firebase-admin:
         specifier: ^14.5.0
         version: 14.5.0(@firebase/app-compat@0.5.19)(@firebase/app@0.16.3)(supports-color@7.2.0)
+      google-auth-library:
+        specifier: ^11.3.0
+        version: 11.3.0(supports-color@7.2.0)
       hono:
         specifier: ^4.13.13
         version: 4.13.13
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       zod:
         specifier: ^4.6.6
         version: 4.6.6
@@ -909,12 +933,20 @@ packages:
     resolution: {integrity: sha512-cUrI+6StY8F/dQB5Lujrl9TFYibDZGGWvPp1aHhvLn4btOlbflxdHoZ6NDWeWySCNtnOYhoiZNQfK4qPC5moBw==}
     engines: {node: '>=22'}
 
+  '@google-cloud/dlp@7.2.0':
+    resolution: {integrity: sha512-e6XSjq9Nf2kkpWFVllNsee9TZUMTybkputcWp5A0+3q1e6oKuJMz49/Bue4koDBTN1W5eNICHRTDNqSd+/2cwg==}
+    engines: {node: '>=22'}
+
   '@google-cloud/firestore-api@0.2.0':
     resolution: {integrity: sha512-wfHJPZmLqzpy6FN6U+7HkkP/AKhGsbHSpEy/qL2TyI3/pKRAvpamQxZ2qvps5hMRgAjfuHCim+oeJj9RveCaqg==}
     engines: {node: '>=18'}
 
   '@google-cloud/firestore@9.3.1':
     resolution: {integrity: sha512-ofGTiSpfXrHrrS3KaDOmsupSzCHr4WVl1+s6Ke0F8rPBRyb/OuZSC8u1NjCKtt/fO7A1GvqASQGhdAwVsnGpQA==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/kms@6.3.0':
+    resolution: {integrity: sha512-hL0J9fZ5TqGLxGH3KE1GuAEEm9Z8+jPFoqR0R46lpS3A/NmoS0p0M4BMBaE7Zev+l5xMmZfveJkNKo4lV/KLEw==}
     engines: {node: '>=22'}
 
   '@google-cloud/paginator@6.1.0':
@@ -949,12 +981,20 @@ packages:
     resolution: {integrity: sha512-xXAQBVVrFviWz8L8yDKEqv1ziVw/gMSpYHt3IxSYRSY0fTyjis+xOrKJILj8dd8PAUHGnGiAIYuTprflkE9jsQ==}
     engines: {node: '>=18'}
 
+  '@google-cloud/run@4.2.0':
+    resolution: {integrity: sha512-idLdoweHOA4la4/46Vw0d1DwyRqjseWQkzDqfF6DzX7Zf18bzTNhWdGGAVAk41gdL50DRhAmOOtn2+0tUQpSAA==}
+    engines: {node: '>=22'}
+
   '@google-cloud/sql@0.25.0':
     resolution: {integrity: sha512-OKAA98q2M25rQcqcFvbQniix4zTFcbeSyauj+PcPd+6ngn7eXvAUqpuCRVxbIGmA8r5OtE6Ru/oCJ1xwcUR2vA==}
     engines: {node: '>=18'}
 
   '@google-cloud/storage@8.4.0':
     resolution: {integrity: sha512-M3kA6UA2Tjp5aznCrgKcm9CzOjiQyRMnquqalqXAeS5wvkqqZxN8wpNjjHafOSYs6lQ82U7f2i8we4eTfIrpkA==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/tasks@7.3.0':
+    resolution: {integrity: sha512-EPK+tFXJ6/j0x5k8TVowVX/Fl8biZX5NioeaQNCqbJVVAGV5wBl0ra0qaBSOyDDYUWiBwHGoxgekVkShQDD73w==}
     engines: {node: '>=22'}
 
   '@google/genai@2.29.1':
@@ -3395,6 +3435,10 @@ packages:
 
   google-auth-library@11.2.0:
     resolution: {integrity: sha512-R9/Dwc3swSur04RnizQ6EBUmmcno2cC5cAKtrG/C+pY+W7c5l6rSnFWgMkR7NSYj1n6XWmb/KhcjxGslWm4yIA==}
+    engines: {node: '>=22'}
+
+  google-auth-library@11.3.0:
+    resolution: {integrity: sha512-gZCyszARHj47WNcKrAcQtimDwtTZpydRZ3HSeb66hObfQU9uaG50ejsZ8LzGISIVAjpsZEouGVs65Q/XRau0Qg==}
     engines: {node: '>=22'}
 
   google-auth-library@9.15.1:
@@ -6831,6 +6875,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@google-cloud/dlp@7.2.0(supports-color@7.2.0)':
+    dependencies:
+      google-gax: 6.12.1(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - supports-color
+
   '@google-cloud/firestore-api@0.2.0(supports-color@7.2.0)':
     dependencies:
       google-gax: 5.0.8(supports-color@7.2.0)
@@ -6850,6 +6900,12 @@ snapshots:
       - supports-color
     optional: true
 
+  '@google-cloud/kms@6.3.0(supports-color@7.2.0)':
+    dependencies:
+      google-gax: 6.12.1(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - supports-color
+
   '@google-cloud/paginator@6.1.0':
     dependencies:
       extend: 3.0.2
@@ -6857,19 +6913,16 @@ snapshots:
   '@google-cloud/paginator@7.1.0':
     dependencies:
       extend: 3.0.2
-    optional: true
 
   '@google-cloud/precise-date@5.2.0': {}
 
   '@google-cloud/projectify@5.2.0': {}
 
-  '@google-cloud/projectify@6.1.0':
-    optional: true
+  '@google-cloud/projectify@6.1.0': {}
 
   '@google-cloud/promisify@5.1.0': {}
 
-  '@google-cloud/promisify@6.1.0':
-    optional: true
+  '@google-cloud/promisify@6.1.0': {}
 
   '@google-cloud/pubsub@5.3.1(supports-color@7.2.0)':
     dependencies:
@@ -6890,6 +6943,12 @@ snapshots:
       lodash.snakecase: 4.1.1
       long: 5.3.2
       p-defer: 3.0.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@google-cloud/run@4.2.0(supports-color@7.2.0)':
+    dependencies:
+      google-gax: 6.12.1(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -6917,7 +6976,12 @@ snapshots:
       teeny-request: 11.0.1(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
-    optional: true
+
+  '@google-cloud/tasks@7.3.0(supports-color@7.2.0)':
+    dependencies:
+      google-gax: 6.12.1(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - supports-color
 
   '@google/genai@2.29.1(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.6))(supports-color@7.2.0)':
     dependencies:
@@ -7204,8 +7268,7 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
-  '@nodable/entities@3.1.0':
-    optional: true
+  '@nodable/entities@3.1.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -8330,8 +8393,7 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.2
 
-  anynum@1.0.1:
-    optional: true
+  anynum@1.0.1: {}
 
   archiver-utils@5.0.2:
     dependencies:
@@ -8395,7 +8457,6 @@ snapshots:
   async-retry@1.3.3:
     dependencies:
       retry: 0.13.1
-    optional: true
 
   async-sema@3.1.1: {}
 
@@ -9424,7 +9485,6 @@ snapshots:
     dependencies:
       path-expression-matcher: 1.6.2
       xml-naming: 0.3.0
-    optional: true
 
   fast-xml-parser@5.11.2:
     dependencies:
@@ -9434,7 +9494,6 @@ snapshots:
       path-expression-matcher: 1.6.2
       strnum: 2.5.1
       xml-naming: 0.3.0
-    optional: true
 
   fastq@1.20.3:
     dependencies:
@@ -9513,7 +9572,7 @@ snapshots:
       '@firebase/database-compat': 2.1.7(@firebase/app-compat@0.5.19)(@firebase/app@0.16.3)
       '@firebase/database-types': 1.0.22
       fast-deep-equal: 3.1.3
-      google-auth-library: 11.2.0(supports-color@7.2.0)
+      google-auth-library: 11.3.0(supports-color@7.2.0)
       jsonwebtoken: 9.0.3
       jwks-rsa: 4.1.0(supports-color@7.2.0)
     optionalDependencies:
@@ -9873,6 +9932,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  google-auth-library@11.3.0(supports-color@7.2.0):
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 7.3.1(supports-color@7.2.0)
+      gcp-metadata: 9.1.0(supports-color@7.2.0)
+      google-logging-utils: 2.0.1
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - supports-color
+
   google-auth-library@9.15.1(supports-color@7.2.0):
     dependencies:
       base64-js: 1.5.1
@@ -9907,7 +9977,7 @@ snapshots:
       '@grpc/proto-loader': 0.8.1
       '@opentelemetry/api': 1.9.1
       duplexify: 4.1.3
-      google-auth-library: 11.2.0(supports-color@7.2.0)
+      google-auth-library: 11.3.0(supports-color@7.2.0)
       google-logging-utils: 2.0.1
       node-fetch: 3.3.2
       object-hash: 3.0.0
@@ -9916,7 +9986,6 @@ snapshots:
       retry-request: 9.0.2
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   google-logging-utils@0.0.2: {}
 
@@ -10004,8 +10073,7 @@ snapshots:
 
   hookified@2.2.0: {}
 
-  html-entities@2.6.0:
-    optional: true
+  html-entities@2.6.0: {}
 
   http-errors@2.0.1:
     dependencies:
@@ -10181,8 +10249,7 @@ snapshots:
 
   is-unicode-supported@0.1.0: {}
 
-  is-unsafe@2.0.2:
-    optional: true
+  is-unsafe@2.0.2: {}
 
   is-url@1.2.4: {}
 
@@ -10555,8 +10622,7 @@ snapshots:
 
   mime@2.6.0: {}
 
-  mime@3.0.0:
-    optional: true
+  mime@3.0.0: {}
 
   mime@4.1.1: {}
 
@@ -11150,8 +11216,7 @@ snapshots:
 
   path-exists@4.0.0: {}
 
-  path-expression-matcher@1.6.2:
-    optional: true
+  path-expression-matcher@1.6.2: {}
 
   path-key@3.1.1: {}
 
@@ -11457,7 +11522,6 @@ snapshots:
   proto3-json-serializer@4.0.2:
     dependencies:
       protobufjs: 7.6.6
-    optional: true
 
   protobufjs@7.6.6:
     dependencies:
@@ -11638,7 +11702,6 @@ snapshots:
   retry-request@9.0.2:
     dependencies:
       extend: 3.0.2
-    optional: true
 
   retry@0.12.0: {}
 
@@ -12001,7 +12064,6 @@ snapshots:
   strnum@2.5.1:
     dependencies:
       anynum: 1.0.1
-    optional: true
 
   structured-clone-es@2.0.1: {}
 
@@ -12096,7 +12158,6 @@ snapshots:
       stream-events: 1.0.5
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   teex@1.0.1:
     dependencies:
@@ -12749,8 +12810,7 @@ snapshots:
 
   xml-name-validator@5.0.0: {}
 
-  xml-naming@0.3.0:
-    optional: true
+  xml-naming@0.3.0: {}
 
   xtend@4.0.2: {}
 

@@ -3,9 +3,30 @@ import { z } from "zod";
 
 const Percent = z.coerce.number().int().min(0).max(100);
 
-// Local defaults for every adapter (D19). Production values arrive in Phase 7.
+// Local defaults for every adapter (D19). The cloud modes need the GCP variables below;
+// `createAdapters` says which one is missing at startup.
 const Config = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
+  GCP_REGION: z.string().min(1).default("us-west1"),
+  // HQ's own URL: Cloud Tasks calls `${HQ_URL}/internal/steps/<step>` with it as the audience.
+  HQ_URL: z
+    .url()
+    .transform((url) => url.replace(/\/+$/, ""))
+    .optional(),
+  // `PIPELINE_MODE=cloud-tasks`: the queue, and the account whose OIDC token tasks carry.
+  TASKS_QUEUE: z.string().min(1).optional(),
+  TASKS_SA_EMAIL: z.string().min(1).optional(),
+  // `SANDBOX_MODE=cloud-run-job`: the job and the buckets mounted at /mnt/in and /mnt/out.
+  SANDBOX_JOB: z.string().min(1).optional(),
+  SANDBOX_IN_BUCKET: z.string().min(1).optional(),
+  SANDBOX_OUT_BUCKET: z.string().min(1).optional(),
+  // `BLOB_BACKEND=gcs`.
+  JOBS_BUCKET: z.string().min(1).optional(),
+  // `VAULT_BACKEND=kms`: full key resource name.
+  KMS_KEY: z.string().min(1).optional(),
+  // `HOUSE_RUNNERS=cloud-run-job`: the honest and the double agent's Cloud Run Jobs.
+  HOUSE_RUNNER_JOB: z.string().min(1).optional(),
+  HOUSE_RUNNER_DOUBLE_AGENT_JOB: z.string().min(1).optional(),
   BLOB_BACKEND: z.enum(["local", "gcs"]).default("local"),
   BLOB_LOCAL_DIR: z.string().default(".data/blobs"),
   PIPELINE_MODE: z.enum(["inline", "cloud-tasks"]).default("inline"),
@@ -14,9 +35,11 @@ const Config = z.object({
   // Host-side cap on one check run; run_checks.py enforces the per-category timeouts itself.
   SANDBOX_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(600),
   GCP_PROJECT: z.string().default("demo-sideagent"),
-  // Set by `firebase emulators:exec`; the `dev` script points it at `pnpm emulators`.
+  // Set by `firebase emulators:exec`; the `dev` script points it at `pnpm emulators`. Unset,
+  // HQ uses the real Firestore of GCP_PROJECT.
   FIRESTORE_EMULATOR_HOST: z.string().optional(),
-  // Same for the Auth emulator, which issues mission control's sign-in tokens.
+  // Same for the Auth emulator, which issues mission control's sign-in tokens; unset, real
+  // Firebase Auth verifies them.
   FIREBASE_AUTH_EMULATOR_HOST: z.string().optional(),
   // Mission control's origin, allowed by CORS on the owner API.
   CONTROL_ORIGIN: z.string().default("http://localhost:3000"),
@@ -70,4 +93,21 @@ export type Config = z.infer<typeof Config>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return Config.parse(env);
+}
+
+type OptionalKey = {
+  [K in keyof Config]-?: undefined extends Config[K] ? K : never;
+}[keyof Config];
+
+/** A variable `mode` can't run without; throws at startup with the mode that needs it. */
+export function required<K extends OptionalKey>(
+  config: Config,
+  name: K,
+  mode: string,
+): NonNullable<Config[K]> {
+  const value = config[name];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${mode} needs ${name}`);
+  }
+  return value as NonNullable<Config[K]>;
 }

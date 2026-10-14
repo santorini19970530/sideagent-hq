@@ -11,7 +11,7 @@ import {
 import { expect, vi } from "vitest";
 import type { GenerateJson, JsonAnswer, PlatformModel } from "../src/agents/model.ts";
 import type { HouseRunnerDispatcher } from "../src/adapters/dispatch/types.ts";
-import { createAdapters } from "../src/adapters/index.ts";
+import { createAdapters, type GcpClients } from "../src/adapters/index.ts";
 import { createApp } from "../src/app.ts";
 import { loadConfig, type Config } from "../src/config.ts";
 import type { CheckOutcome, MutantScore, Sandbox } from "../src/sandbox/types.ts";
@@ -115,13 +115,22 @@ function defaultAnswer(agent: string): unknown {
 
 // Runs against the Firestore emulator started by `pnpm test`. Every test creates its own
 // owner and agents, so test files can share the emulator without clearing it.
-// House runners are off unless a test passes a `dispatcher`. Post limits are lifted unless a
-// test sets them in `config`, and each harness has its own counters and kill switch, the switch
-// read without a cache.
+// House runners are off unless a test passes a `dispatcher`, and GCP clients are the fakes in
+// `gcp`. Post limits are lifted unless a test sets them in `config`, and each harness has its
+// own counters and kill switch, the switch read without a cache.
 export function createHarness({
   dispatcher = null,
   config: overrides = {},
-}: { dispatcher?: HouseRunnerDispatcher | null; config?: Partial<Config> } = {}) {
+  gcp,
+}: {
+  dispatcher?: HouseRunnerDispatcher | null;
+  config?: Partial<Config>;
+  gcp?: GcpClients;
+} = {}) {
+  // Without the emulators, firebase-admin would talk to a real project.
+  if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    throw new Error("Run tests through `pnpm test`, which starts the Firestore and Auth emulators");
+  }
   const dir = mkdtempSync(join(tmpdir(), "sideagent-blobs-"));
   const config = {
     ...loadConfig(process.env),
@@ -140,6 +149,7 @@ export function createHarness({
     dispatcher,
     model,
     limits: { configDoc, usageCollection: `usage-test-${testId}`, cacheMs: 0 },
+    gcp,
   });
   const clock = { now: new Date() };
   const app = createApp(config, adapters, { now: () => clock.now });

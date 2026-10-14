@@ -22,11 +22,14 @@ describe("HQ app", () => {
 });
 
 describe("createAdapters", () => {
-  it("refuses cloud backends before Phase 7", () => {
-    expect(() => createAdapters(loadConfig({ BLOB_BACKEND: "gcs" }))).toThrow(/Phase 7/);
+  it("refuses a cloud backend without its variables", () => {
+    const env = { FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST };
+    expect(() => createAdapters(loadConfig({ ...env, BLOB_BACKEND: "gcs" }))).toThrow(
+      "BLOB_BACKEND=gcs needs JOBS_BUCKET",
+    );
   });
 
-  it("refuses to run without the Firestore emulator before Phase 7", () => {
+  it("refuses the demo project without the Firestore emulator", () => {
     expect(() => createAdapters(loadConfig({}))).toThrow(/emulator/);
   });
 });

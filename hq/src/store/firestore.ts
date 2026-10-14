@@ -10,23 +10,42 @@ function firebaseApp(config: Config): App {
   );
 }
 
+// `demo-*` projects exist only in the emulators.
+function isDemoProject(config: Config): boolean {
+  return config.GCP_PROJECT.startsWith("demo-");
+}
+
+/**
+ * The Firestore emulator when FIRESTORE_EMULATOR_HOST is set (development and tests), else the
+ * real Firestore of GCP_PROJECT with application default credentials (Phase 7).
+ */
 export function createFirestore(config: Config): Firestore {
-  // Emulator only until Phase 7 (D19). firebase-admin reads the host from the environment.
-  if (!config.FIRESTORE_EMULATOR_HOST) {
-    throw new Error(
-      "Firestore is emulator-only until Phase 7: run `pnpm emulators` and set FIRESTORE_EMULATOR_HOST",
-    );
+  if (config.FIRESTORE_EMULATOR_HOST) {
+    // firebase-admin reads the host from the environment.
+    process.env.FIRESTORE_EMULATOR_HOST = config.FIRESTORE_EMULATOR_HOST;
+  } else {
+    // Without an emulator, firebase-admin talks to the real project, so it must be a real one.
+    if (isDemoProject(config)) {
+      throw new Error(
+        `FIRESTORE_EMULATOR_HOST is unset and GCP_PROJECT=${config.GCP_PROJECT} is a demo ` +
+          "project: run `pnpm emulators` and set FIRESTORE_EMULATOR_HOST, or set GCP_PROJECT",
+      );
+    }
   }
-  process.env.FIRESTORE_EMULATOR_HOST = config.FIRESTORE_EMULATOR_HOST;
   return getFirestore(firebaseApp(config));
 }
 
 /**
- * Verifies mission control's Firebase ID tokens. Emulator only until Phase 7 (D19); without the
- * emulator there is no Auth and the owner API refuses every call.
+ * Verifies mission control's Firebase ID tokens: the Auth emulator when
+ * FIREBASE_AUTH_EMULATOR_HOST is set, else real Firebase Auth for GCP_PROJECT. Null for a demo
+ * project without the emulator (scripts that only need Firestore); the owner API then refuses
+ * every call.
  */
 export function createAuth(config: Config): Auth | null {
-  if (!config.FIREBASE_AUTH_EMULATOR_HOST) return null;
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = config.FIREBASE_AUTH_EMULATOR_HOST;
+  if (config.FIREBASE_AUTH_EMULATOR_HOST) {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = config.FIREBASE_AUTH_EMULATOR_HOST;
+  } else if (isDemoProject(config)) {
+    return null;
+  }
   return getAuth(firebaseApp(config));
 }

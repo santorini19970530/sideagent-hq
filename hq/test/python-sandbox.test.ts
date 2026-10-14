@@ -73,17 +73,21 @@ async function docker(args: string[]): Promise<{ code: number; stdout: string }>
   }
 }
 
-async function check(files: Files) {
+// Where the Cloud Run job mounts a check's folders (`--job`, `--out`); the default is /job, /out.
+const CLOUD_PATHS = { job: "/mnt/in/job-1/check-1", out: "/mnt/out/job-1/check-1" };
+
+async function check(files: Files, paths?: typeof CLOUD_PATHS) {
   const job = await tempDir();
   const out = await tempDir();
   await writeFiles(job, files);
   const { code } = await docker([
     "run",
     ...RUN_FLAGS,
-    `--volume=${job}:/job:ro`,
-    `--volume=${out}:/out`,
+    `--volume=${job}:${paths?.job ?? "/job"}:ro`,
+    `--volume=${out}:${paths?.out ?? "/out"}`,
     IMAGE,
     "check",
+    ...(paths ? [`--job=${paths.job}`, `--out=${paths.out}`] : []),
   ]);
   const read = async (name: string): Promise<unknown> => {
     try {
@@ -106,11 +110,12 @@ async function check(files: Files) {
   };
 }
 
-async function run(files: Files, tests: string[]) {
+async function run(files: Files, tests: string[], workPath?: string) {
   const work = await tempDir();
   await writeFiles(work, files);
-  const flags = [...RUN_FLAGS, `--volume=${work}:/work:ro`];
-  return docker(["run", ...flags, IMAGE, "run", "--timeout=10", "--", ...tests]);
+  const flags = [...RUN_FLAGS, `--volume=${work}:${workPath ?? "/work"}:ro`];
+  const workArg = workPath ? [`--work=${workPath}`] : [];
+  return docker(["run", ...flags, IMAGE, "run", ...workArg, "--timeout=10", "--", ...tests]);
 }
 
 describe.skipIf(!hasDocker)("python sandbox image", () => {
@@ -126,6 +131,24 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
         summary: ALL_PASS,
         error: undefined,
         mutants: undefined,
+      });
+    });
+
+    it("reads and writes the folders given by --job and --out", async () => {
+      expect(await check({ ...TESTS, "result/solution.py": SOLUTION }, CLOUD_PATHS)).toEqual({
+        code: 0,
+        summary: ALL_PASS,
+        error: undefined,
+        mutants: undefined,
+      });
+      const rejected = await check(
+        { ...TESTS, "result/solution.py": WRONG, "result/conftest.py": "" },
+        CLOUD_PATHS,
+      );
+      expect(rejected).toMatchObject({
+        code: 2,
+        summary: undefined,
+        error: { code: "invalid_request" },
       });
     });
 
@@ -388,6 +411,16 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
       ]);
       expect(code).toBe(1);
       expect(stdout).toContain("assert None == 3");
+    });
+
+    it("runs the tests in the folder given by --work", async () => {
+      const { code, stdout } = await run(
+        { ...publicTest, "solution.py": SOLUTION },
+        ["test_public.py"],
+        "/mnt/work",
+      );
+      expect(code).toBe(0);
+      expect(stdout).toContain("1 passed");
     });
   });
 });

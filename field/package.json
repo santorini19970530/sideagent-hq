@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/genai": "^2.29.1",
     "@sideagent/protocol": "workspace:*",
+    "tsx": "^4.23.15",
     "zod": "^4.6.6"
   }
 }

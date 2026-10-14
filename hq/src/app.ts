@@ -3,6 +3,7 @@ import { apiError } from "@sideagent/protocol";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Adapters } from "./adapters/index.ts";
+import { internalRoutes } from "./api/internal.ts";
 import { jobRoutes } from "./api/jobs.ts";
 import { ownerRoutes } from "./api/owner.ts";
 import { requireAgent, requireOwner, type AuthEnv } from "./auth.ts";
@@ -21,6 +22,9 @@ export function createApp(config: Config, adapters: Adapters, { now }: AppOption
   const app = new Hono<AuthEnv>();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // Pipeline steps from Cloud Tasks, authenticated by its OIDC token instead of an API key.
+  app.route("/internal", internalRoutes(config, adapters.steps, adapters.idTokens));
 
   // Mission control, signed in with Firebase. Registered first: these routes answer before the
   // API-key middleware below runs.

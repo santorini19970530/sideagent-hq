@@ -1,12 +1,13 @@
 """Runs untrusted pytest suites for Sideagent. Stdlib only; never imports job code.
 
-  run [--timeout N] -- <test paths...>
-      Laptop runners: run public tests in /work and print the pytest output.
-  check
-      HQ: score /job/result against each /job/tests/<category>/ and write /out/summary.json
-      (counts only), or /out/error.json when the result is rejected. When /job/config.json asks
+  run [--work DIR] [--timeout N] -- <test paths...>
+      Runners: run public tests in DIR (default /work) and print the pytest output.
+  check [--job DIR] [--out DIR]
+      HQ: score JOB/result against each JOB/tests/<category>/ and write OUT/summary.json
+      (counts only), or OUT/error.json when the result is rejected. When JOB/config.json asks
       for mutants, also score the tests themselves: how many small breaking changes to the
-      result they catch, in /out/mutants.json.
+      result they catch, in OUT/mutants.json. JOB defaults to /job and OUT to /out; on Cloud Run
+      they are per-check folders of the mounted buckets.
 
 Code under test runs in a child process with a fixed environment and its own process group. See
 "Test sandbox" in docs/technical.md for the known gaps.
@@ -20,12 +21,15 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 from typing import IO
 
 PYTEST_INI = "/opt/sideagent/pytest.ini"
+# Mount points by default; main() replaces them with --work, --job and --out. They hold untrusted
+# files either way.
 WORK = Path("/work")
 JOB = Path("/job")
 OUT = Path("/out")
@@ -169,8 +173,9 @@ def verdict(
 
 
 def score_category(
-    category: str, result: list[PurePosixPath], timeout: int, source: Path = JOB / "result"
+    category: str, result: list[PurePosixPath], timeout: int, source: Path | None = None
 ) -> tuple[int, int]:
+    source = source or JOB / "result"
     tests_dir = JOB / "tests" / category
     tests = list_files(tests_dir)
     if set(tests) & set(result):
@@ -388,7 +393,7 @@ def check() -> int:
     timeout, mutants = load_config()
     categories = sorted(p.name for p in (JOB / "tests").iterdir() if p.is_dir())
     if not categories:
-        raise SystemExit("No test categories in /job/tests")
+        raise SystemExit(f"No test categories in {JOB / 'tests'}")
     try:
         result = list_files(JOB / "result")
         for rel in result:
@@ -426,8 +431,8 @@ def check() -> int:
 
 
 def run(tests: list[str], timeout: int) -> int:
-    log = Path("/tmp/run-output.txt")
-    with log.open("w+b") as out:
+    # Unnamed, so tests can't find the log and rewrite it.
+    with tempfile.TemporaryFile() as out:
         code = run_pytest(WORK, ["-q", "--", *tests], timeout, out)
         out.seek(0)
         output = out.read(MAX_OUTPUT_BYTES + 1)
@@ -440,16 +445,28 @@ def run(tests: list[str], timeout: int) -> int:
     return code
 
 
+def on_sigterm(signum: int, _frame: object) -> None:
+    # Unwinds through run_pytest's `finally`, so a stopped run leaves no tests running.
+    raise SystemExit(128 + signum)
+
+
 def main() -> int:
+    global WORK, JOB, OUT
     parser = argparse.ArgumentParser(prog="run_checks.py")
     commands = parser.add_subparsers(dest="command", required=True)
-    run_parser = commands.add_parser("run", help="run public tests in /work")
+    run_parser = commands.add_parser("run", help="run public tests in --work")
+    run_parser.add_argument("--work", type=Path, default=WORK)
     run_parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     run_parser.add_argument("tests", nargs="+")
-    commands.add_parser("check", help="score /job and write /out/summary.json")
+    check_parser = commands.add_parser("check", help="score --job and write --out/summary.json")
+    check_parser.add_argument("--job", type=Path, default=JOB)
+    check_parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
+    signal.signal(signal.SIGTERM, on_sigterm)
     if args.command == "run":
+        WORK = args.work.resolve()
         return run(args.tests, min(max(args.timeout, 1), MAX_TIMEOUT))
+    JOB, OUT = args.job.resolve(), args.out.resolve()
     return check()
 
 

@@ -2,15 +2,11 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmod } from "node:fs/promises";
 import { DOCKER_RUN_FLAGS } from "@sideagent/protocol";
+import { runCapped, TEST_TIMEOUT_SECONDS } from "./spawn.ts";
 import type { PublicTestRun, PublicTestRunner } from "./types.ts";
 
-/** Cap on pytest inside the container; run_checks.py enforces it. */
-const TEST_TIMEOUT_SECONDS = 60;
 /** Extra time for the container to start and stop before it is killed. */
 const DOCKER_GRACE_MS = 30_000;
-const STDERR_TAIL = 2000;
-// run_checks.py caps pytest's output at 64 KB, but test code can write to stdout directly.
-const STDOUT_TAIL = 128 * 1024;
 
 /**
  * Laptop runners: `run_checks.py run` in the python-sandbox image, with the workspace mounted
@@ -38,54 +34,25 @@ export function createDockerTestRunner({ image }: { image: string }): PublicTest
   };
 }
 
-function dockerRun(
+async function dockerRun(
   args: string[],
   name: string,
   timeoutMs: number,
   signal: AbortSignal,
 ): Promise<PublicTestRun> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout = (stdout + chunk).slice(-STDOUT_TAIL);
-    });
-    child.stderr.on("data", (chunk: string) => {
-      stderr = (stderr + chunk).slice(-STDERR_TAIL);
-    });
-    let stopReason: string | null = null;
+  const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
+  const { code, stdout, stderr } = await runCapped(child, {
+    what: "docker",
+    timeoutMs,
+    signal,
     // Killing the CLI would leave the container running; kill the container by name. If it was
     // never created, the kill fails, so stop the CLI too.
-    const stop = (reason: string) => {
-      stopReason ??= reason;
-      execFile("docker", ["kill", name], () => child.kill("SIGKILL"));
-    };
-    const timer = setTimeout(
-      () => stop(`Public tests exceeded ${timeoutMs / 1000} seconds`),
-      timeoutMs,
-    );
-    const onAbort = () => stop("Stopped by the runner");
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-    const cleanup = () => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-    };
-    child.on("error", (err) => {
-      cleanup();
-      reject(new Error(`Could not start docker: ${err.message}`));
-    });
-    child.on("close", (code) => {
-      cleanup();
-      if (stopReason) reject(new Error(stopReason));
-      // 125–127 are docker's own failures (bad flags, image missing, command not found). Higher
-      // codes are the tests dying (137: out of memory) and go back to the model.
-      else if (code === null || (code >= 125 && code <= 127)) {
-        reject(new Error(`docker run failed: ${stderr}. Run \`pnpm sandbox:build\` first.`));
-      } else resolve({ exitCode: code, output: stdout });
-    });
+    kill: () => execFile("docker", ["kill", name], () => child.kill("SIGKILL")),
   });
+  // 125–127 are docker's own failures (bad flags, image missing, command not found). Higher
+  // codes are the tests dying (137: out of memory) and go back to the model.
+  if (code === null || (code >= 125 && code <= 127)) {
+    throw new Error(`docker run failed: ${stderr}. Run \`pnpm sandbox:build\` first.`);
+  }
+  return { exitCode: code, output: stdout };
 }

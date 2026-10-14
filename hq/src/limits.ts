@@ -7,6 +7,9 @@ import {
 import type { Config } from "./config.ts";
 import { HqError } from "./errors.ts";
 
+/** The kill switch (D32): `paused: true` refuses new paid work. Also set by the budget guard. */
+export const PLATFORM_CONFIG_DOC = "config/platform";
+
 const DAY_MS = 24 * 3600_000;
 // Outlives the longest counter window, a UTC day, before a Firestore TTL policy deletes it.
 const COUNTER_TTL_MS = 2 * DAY_MS;
@@ -32,7 +35,7 @@ export function createLimits(
   db: Firestore,
   config: Pick<Config, "LIMIT_POSTS_PER_HOUR" | "LIMIT_POSTS_PER_DAY">,
   {
-    configDoc = "config/platform",
+    configDoc = PLATFORM_CONFIG_DOC,
     usageCollection = "usage",
     cacheMs = 30_000,
   }: LimitsOptions = {},

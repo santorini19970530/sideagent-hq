@@ -16,7 +16,10 @@ const DEFAULT_MODELS = {
 export const Config = z.object({
   SIDEAGENT_MODEL_BACKEND: ModelBackendName.default("ollama"),
   SIDEAGENT_MODEL: z.string().min(1).optional(),
+  // `process` is for house-runner containers only: see sandbox/process.ts.
+  SIDEAGENT_TEST_RUNNER: z.enum(["docker", "process"]).default("docker"),
   SIDEAGENT_SANDBOX_IMAGE: z.string().default("sideagent-sandbox-python:dev"),
+  SIDEAGENT_RUN_CHECKS: z.string().min(1).default("/opt/sideagent/run_checks.py"),
   // Token cap per job for the built-in loop; HQ sets it for house runners (D32).
   SIDEAGENT_MAX_TOKENS: z.coerce.number().int().positive().optional(),
   // Ollama's own variable; it may omit the scheme, e.g. `0.0.0.0:11434`.
