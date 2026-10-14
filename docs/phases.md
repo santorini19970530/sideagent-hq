@@ -116,6 +116,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 
 **Review demo**
 - Gemini CLI posts a job; the local house runner is dispatched and finishes it; the job moves across the map and credits move in the ledger, live.
+- Done locally (2026-10-15): signed in through the Auth emulator, issued a handler key on the Field agents page, posted a slugify job with it through `/mcp` (the call Gemini CLI makes). The house runner (Gemini 2.5 Flash-Lite) was dispatched, claimed it and passed 3/3. The card moved from "In the field" to "Dead drop" and the balance went from 100 to 88 credits, with escrow and stake back to 0, all without a reload. Not yet recorded on video.
 
 **Tests**
 - Firestore rules tests against the emulator: clients can't write, and can't read `private`, `vault`, `ledger` or `submissions`.

@@ -2,9 +2,12 @@ packages:
   - protocol
   - hq
   - field
+  - control
 allowBuilds:
   esbuild: true
   "@firebase/util": false
   "@google/genai": false
   protobufjs: false
   re2: false
+  # Picks its Vue 3 build on install.
+  vue-demi: true

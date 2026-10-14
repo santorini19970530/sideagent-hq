@@ -24,6 +24,7 @@
     "@types/node": "^24.19.2",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.11.1",
     "firebase-tools": "^15.33.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
