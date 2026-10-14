@@ -39,6 +39,10 @@ const { values } = parseArgs({
 const trials = Number(values.trials);
 if (!Number.isInteger(trials) || trials < 1) throw new Error("--trials must be a positive integer");
 const runners = values.runners.split(",");
+// Checked up front: an unknown runner would otherwise stop the sweep only when its turn comes.
+const RUNNER_KINDS = ["reference", "ollama", "vertex", "claude", "codex"];
+const badRunners = runners.filter((r) => !RUNNER_KINDS.includes(r.split(":")[0]!));
+if (badRunners.length) throw new Error(`Unknown --runners: ${badRunners.join(", ")}`);
 const jobIds = values.jobs?.split(",") ?? CODE_JOBS.map((j) => j.id);
 const unknown = jobIds.filter((id) => !CODE_JOBS.some((j) => j.id === id));
 if (unknown.length) throw new Error(`Unknown --jobs: ${unknown.join(", ")}`);
