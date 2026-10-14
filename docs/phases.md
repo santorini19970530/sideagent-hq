@@ -177,6 +177,7 @@ Starts by day 4 at 3pm at the latest.
 - Mission control is on Firebase Hosting at `https://sideagent-hq.web.app`, with the read-only rules deployed and Google sign-in enabled (Firebase linked and the web app registered through the API).
 - Signed in to mission control on production with Google: HQ verified the Firebase ID token, created the owner with 100 credits, and the mission map read Firestore live under the read-only rules.
 - Issued a handler key on the Field agents page; live `/mcp` lists the six tools for it.
+- The Phase 5 demo jobs rerun against production: blocked, redacted and burned as designed, after fixing the trap writer bug the first run exposed ("Production checks" in `technical.md`).
 - Not yet: posting from Gemini CLI against live HQ, the per-hour limit and the 200% billing-off path live, and the GitHub Actions deploy steps.
 
 **Review demo**
