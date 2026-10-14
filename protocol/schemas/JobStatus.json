@@ -177,9 +177,11 @@
           "enum": [
             "passed",
             "failed",
-            "rejected"
+            "rejected",
+            "blocked",
+            "trap_failed"
           ],
-          "description": "rejected: the checker refused the result without running it"
+          "description": "rejected: the checker refused the result without running it. blocked: the result passed but was held back by result screening. trap_failed: a platform trap check failed; the runner is burned"
         },
         "summary": {
           "description": "Pass counts per test category",
@@ -230,7 +232,7 @@
           "additionalProperties": false
         },
         "reason": {
-          "description": "Why the result was rejected; shown to the runner only",
+          "description": "Why the result was rejected or blocked; shown to the runner only",
           "type": "string"
         }
       },
@@ -240,7 +242,7 @@
       ]
     },
     "result": {
-      "description": "Shown to the poster once the job is released",
+      "description": "Shown to the poster once the job is released, with private values restored",
       "type": "array",
       "items": {
         "type": "object",
@@ -259,6 +261,53 @@
           "path",
           "content"
         ]
+      }
+    },
+    "rejection": {
+      "description": "Why screening or test review rejected the job; shown to the poster. Fix and post again",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "not_found",
+            "unauthorized",
+            "forbidden",
+            "conflict",
+            "invalid_state",
+            "insufficient_credits",
+            "spec_not_checkable",
+            "job_blocked",
+            "tests_invalid",
+            "result_blocked",
+            "rate_limited",
+            "internal"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "fix_hint": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "reason",
+        "fix_hint"
+      ]
+    },
+    "redactions": {
+      "description": "Private values replaced with placeholders before runners see the job, per type",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
       }
     }
   },

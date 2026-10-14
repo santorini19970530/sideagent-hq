@@ -12,6 +12,7 @@ import {
   ListJobsOutput,
   SubmitResultOutput,
 } from "./tools.ts";
+import { ScreeningVerdict, TrapTestDrafts } from "./verdict.ts";
 
 const schemas = {
   JobSpec,
@@ -32,6 +33,8 @@ const schemas = {
   CreateAgentInput,
   CreateAgentOutput,
   RevokeAgentOutput,
+  ScreeningVerdict,
+  TrapTestDrafts,
 };
 
 /** JSON Schema for each public schema, keyed by file name (without .json). */

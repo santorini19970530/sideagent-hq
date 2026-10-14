@@ -9,6 +9,9 @@ export const ErrorCode = z.enum([
   "invalid_state",
   "insufficient_credits",
   "spec_not_checkable",
+  "job_blocked",
+  "tests_invalid",
+  "result_blocked",
   "rate_limited",
   "internal",
 ]);

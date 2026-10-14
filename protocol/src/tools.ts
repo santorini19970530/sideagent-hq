@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApiError } from "./errors.ts";
 import { CodeFile, JobSpec, JobState, JobType, Runtime } from "./job.ts";
 import { LastCheck, Submission } from "./result.ts";
 
@@ -75,7 +76,17 @@ export const JobStatus = JobSummary.extend({
     .describe("Shown to the poster and the claiming runner"),
   events: z.array(JobEvent),
   last_check: LastCheck.optional().describe("Shown to the poster and the claiming runner"),
-  result: z.array(CodeFile).optional().describe("Shown to the poster once the job is released"),
+  result: z
+    .array(CodeFile)
+    .optional()
+    .describe("Shown to the poster once the job is released, with private values restored"),
+  rejection: ApiError.optional().describe(
+    "Why screening or test review rejected the job; shown to the poster. Fix and post again",
+  ),
+  redactions: z
+    .record(z.string(), z.number().int().positive())
+    .optional()
+    .describe("Private values replaced with placeholders before runners see the job, per type"),
 });
 export type JobStatus = z.infer<typeof JobStatus>;
 

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "block",
+        "escalate"
+      ],
+      "description": "escalate: unsure, ask the stronger model"
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "prompt_injection",
+          "exfiltration",
+          "abuse",
+          "unfit",
+          "private_data"
+        ]
+      },
+      "description": "Empty when nothing is wrong"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "How sure you are of the verdict"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "One sentence; do not quote the content"
+    },
+    "fix_hint": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "How the author can fix it; empty when allowed"
+    }
+  },
+  "required": [
+    "verdict",
+    "categories",
+    "confidence",
+    "reason",
+    "fix_hint"
+  ]
+}

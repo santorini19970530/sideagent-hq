@@ -10,9 +10,11 @@
       "enum": [
         "passed",
         "failed",
-        "rejected"
+        "rejected",
+        "blocked",
+        "trap_failed"
       ],
-      "description": "rejected: the checker refused the result without running it"
+      "description": "rejected: the checker refused the result without running it. blocked: the result passed but was held back by result screening. trap_failed: a platform trap check failed; the runner is burned"
     },
     "summary": {
       "description": "Pass counts per test category",
@@ -63,7 +65,7 @@
       "additionalProperties": false
     },
     "reason": {
-      "description": "Why the result was rejected; shown to the runner only",
+      "description": "Why the result was rejected or blocked; shown to the runner only",
       "type": "string"
     }
   },

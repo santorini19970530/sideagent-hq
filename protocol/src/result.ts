@@ -10,7 +10,8 @@ export type Submission = z.infer<typeof Submission>;
 
 const Count = z.number().int().nonnegative();
 
-// Counts only: runners and posters never see test bodies through this shape.
+// Counts only: runners and posters never see test bodies through this shape. Trap checks are
+// counted under `hidden`, so a runner can't tell them apart.
 export const TestSummary = z.strictObject({
   passed: Count,
   total: Count,
@@ -18,14 +19,20 @@ export const TestSummary = z.strictObject({
 });
 export type TestSummary = z.infer<typeof TestSummary>;
 
-export const CheckOutcome = z.enum(["passed", "failed", "rejected"]);
+export const CheckOutcome = z.enum(["passed", "failed", "rejected", "blocked", "trap_failed"]);
 export type CheckOutcome = z.infer<typeof CheckOutcome>;
 
 // The latest check of a job. Counts only, never test names or bodies.
 export const LastCheck = z.object({
   submission_id: z.string(),
-  outcome: CheckOutcome.describe("rejected: the checker refused the result without running it"),
+  outcome: CheckOutcome.describe(
+    "rejected: the checker refused the result without running it. blocked: the result passed but " +
+      "was held back by result screening. trap_failed: a platform trap check failed; the runner is burned",
+  ),
   summary: TestSummary.optional().describe("Pass counts per test category"),
-  reason: z.string().optional().describe("Why the result was rejected; shown to the runner only"),
+  reason: z
+    .string()
+    .optional()
+    .describe("Why the result was rejected or blocked; shown to the runner only"),
 });
 export type LastCheck = z.infer<typeof LastCheck>;

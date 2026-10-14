@@ -6,4 +6,5 @@ export * from "./result.ts";
 export * from "./runner.ts";
 export * from "./sandbox.ts";
 export * from "./tools.ts";
+export * from "./verdict.ts";
 export { exportedSchemas } from "./json-schema.ts";
