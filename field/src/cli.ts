@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { JobType } from "@sideagent/protocol";
 import pkg from "../package.json" with { type: "json" };
 import { Config, createModelBackend } from "./config.ts";
+import { createCheatExecutor } from "./executor/cheat.ts";
 import { createCommandExecutor, TOOLS, type Tool } from "./executor/command.ts";
 import { createGemmaLoopExecutor } from "./executor/gemma-loop.ts";
 import type { Executor } from "./executor/types.ts";
@@ -62,7 +63,10 @@ async function field(argv: string[]) {
   });
 
   let executor: Executor;
-  if (values.executor === "command") {
+  // The demo double agent, set by HQ's dispatcher with HOUSE_RUNNER_DOUBLE_AGENT=1 (Phase 5).
+  if (process.env.SIDEAGENT_SIMULATE_CHEAT === "1") {
+    executor = createCheatExecutor();
+  } else if (values.executor === "command") {
     const tool = values.command;
     if (!isTool(tool)) fail(`Unknown --command ${tool}; use ${Object.keys(TOOLS).join(" or ")}`);
     if (!values["trusted-dev"]) {
