@@ -1,4 +1,12 @@
-import type { CodeFile, JobState, JobSummary, JobType, Runtime } from "@sideagent/protocol";
+import type {
+  CheckOutcome,
+  CodeFile,
+  JobState,
+  JobSummary,
+  JobType,
+  Runtime,
+  TestSummary,
+} from "@sideagent/protocol";
 import {
   Timestamp,
   type DocumentReference,
@@ -7,9 +15,13 @@ import {
 } from "firebase-admin/firestore";
 import { HqError } from "../errors.ts";
 import { canTransition } from "../jobs/transitions.ts";
+import { accounts, transfer } from "../ledger/ledger.ts";
 
 export interface ClaimDoc {
   runnerAgentId: string;
+  runnerOwnerId: string;
+  /** Credits held in `stake:<jobId>:<runnerAgentId>` while the claim lasts. */
+  stake: number;
   claimedAt: Timestamp;
   deadline: Timestamp;
   attemptsLeft: number;
@@ -29,12 +41,20 @@ export interface JobDoc {
   deadline: Timestamp;
   claim: ClaimDoc | null;
   passedSubmissionId: string | null;
+  /** Counts only; the rejection reason stays on the submission. */
+  lastCheck: LastCheckDoc | null;
   idempotencyKey: string;
   requestHash: string;
   /** Number of events written; the next event's sequence number. */
   eventSeq: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface LastCheckDoc {
+  submissionId: string;
+  outcome: CheckOutcome;
+  summary: TestSummary | null;
 }
 
 /** States in which a runner holds a claim that can time out. */
@@ -135,11 +155,34 @@ export function claimExpired(job: JobDoc, at: Timestamp): boolean {
   );
 }
 
-/** Lazy claim timeout (D21): no timer runs; the next write path returns the job to `open`. */
-export function expireClaimIfDue(u: JobUpdate): void {
-  if (!claimExpired(u.job, u.at)) return;
-  u.move("open", "Claim timed out");
+/**
+ * Lazy claim timeout (D21): no timer runs; the next write path returns the job to `open`.
+ * `slashPercent` of the stake goes to platform fees and the rest back to the runner's owner.
+ * Returns that refund, for callers that read the owner's balance before this write.
+ */
+export function expireClaimIfDue(
+  u: JobUpdate,
+  slashPercent: number,
+): { ownerId: string; amount: number } | null {
+  const claim = u.job.claim;
+  if (!claim || !claimExpired(u.job, u.at)) return null;
+  const slashed = Math.floor((claim.stake * slashPercent) / 100);
+  u.move(
+    "open",
+    slashed ? `Claim timed out; ${slashed} credits of stake slashed` : "Claim timed out",
+  );
+  releaseStake(u, claim, slashed, "Claim timed out");
   u.job.claim = null;
+  return { ownerId: claim.runnerOwnerId, amount: claim.stake - slashed };
+}
+
+/** Empties the claim's stake account: `slashed` credits to fees, the rest to the runner's owner. */
+export function releaseStake(u: JobUpdate, claim: ClaimDoc, slashed: number, reason: string) {
+  const entry = { from: accounts.stake(u.ref.id, claim.runnerAgentId), jobId: u.ref.id, reason };
+  const db = u.ref.firestore;
+  transfer(u.tx, db, { ...entry, to: accounts.fees, amount: slashed }, u.at);
+  const to = accounts.owner(claim.runnerOwnerId);
+  transfer(u.tx, db, { ...entry, to, amount: claim.stake - slashed }, u.at);
 }
 
 export function toSummary(jobId: string, job: JobDoc): JobSummary {

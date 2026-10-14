@@ -12,7 +12,8 @@ const NEXT: Record<JobState, readonly JobState[]> = {
   submitted: ["checking"],
   checking: ["passed", "failed"],
   passed: ["released", "disputed"],
-  failed: ["open", "expired", "disputed"],
+  // failed → claimed: the runner still has attempts left on its claim (D23).
+  failed: ["claimed", "open", "expired", "disputed"],
   // Dispute resolution is not designed yet.
   disputed: [],
   released: [],

@@ -17,3 +17,15 @@ export const TestSummary = z.strictObject({
   categories: z.record(z.string(), z.strictObject({ passed: Count, total: Count })),
 });
 export type TestSummary = z.infer<typeof TestSummary>;
+
+export const CheckOutcome = z.enum(["passed", "failed", "rejected"]);
+export type CheckOutcome = z.infer<typeof CheckOutcome>;
+
+// The latest check of a job. Counts only, never test names or bodies.
+export const LastCheck = z.object({
+  submission_id: z.string(),
+  outcome: CheckOutcome.describe("rejected: the checker refused the result without running it"),
+  summary: TestSummary.optional().describe("Pass counts per test category"),
+  reason: z.string().optional().describe("Why the result was rejected; shown to the runner only"),
+});
+export type LastCheck = z.infer<typeof LastCheck>;

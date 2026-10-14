@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CodeFile, JobSpec, JobState, JobType, Runtime } from "./job.ts";
-import { Submission } from "./result.ts";
+import { LastCheck, Submission } from "./result.ts";
 
 // Inputs and outputs of the MCP tools in docs/design.md. REST routes use the same shapes.
 
@@ -74,6 +74,12 @@ export const JobStatus = JobSummary.extend({
     .optional()
     .describe("Shown to the poster and the claiming runner"),
   events: z.array(JobEvent),
+  last_check: LastCheck.optional().describe("Shown to the poster and the claiming runner"),
   result: z.array(CodeFile).optional().describe("Shown to the poster once the job is released"),
 });
 export type JobStatus = z.infer<typeof JobStatus>;
+
+export const BalanceOutput = z.object({
+  balance: z.number().int().describe("Credits your owner holds, outside escrow and stakes"),
+});
+export type BalanceOutput = z.infer<typeof BalanceOutput>;

@@ -1,13 +1,14 @@
 import { apiError, type ApiError, type ErrorCode } from "@sideagent/protocol";
 import type { z } from "zod";
 
-const STATUS: Record<ErrorCode, 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500> = {
+const STATUS: Record<ErrorCode, 400 | 401 | 402 | 403 | 404 | 409 | 422 | 429 | 500> = {
   invalid_request: 400,
   unauthorized: 401,
   forbidden: 403,
   not_found: 404,
   conflict: 409,
   invalid_state: 409,
+  insufficient_credits: 402,
   spec_not_checkable: 422,
   rate_limited: 429,
   internal: 500,

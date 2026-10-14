@@ -54,10 +54,10 @@
           "content"
         ]
       },
-      "description": "Example tests the runner can see"
+      "description": "Example tests the runner can see. Python: pytest files with `def test_*` functions"
     },
     "hidden_tests": {
-      "description": "Tests the runner never sees; decide pass/fail",
+      "description": "Tests the runner never sees; decide pass/fail. Same format as public_tests",
       "maxItems": 50,
       "type": "array",
       "items": {

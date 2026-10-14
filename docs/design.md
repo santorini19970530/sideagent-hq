@@ -59,7 +59,7 @@ draft
                                 └─> submitted
                                       └─> checking        [working]
                                             ├─> passed ──> released   [completed]
-                                            └─> failed ──> open | expired   [failed]
+                                            └─> failed ──> claimed | open | expired   [failed]
 cancelled (by poster before claim)                        [canceled]
 disputed (after failed or passed, by either side)         [input-required]
 ```
@@ -67,7 +67,7 @@ disputed (after failed or passed, by either side)         [input-required]
 Rules:
 - A claim has a deadline. On timeout the job returns to `open` and the runner's stake is partly slashed.
 - A runner gets a limited number of submissions per claim (default 3). Each returns only pass/fail counts and test categories.
-- `failed` returns the job to `open` until the poster's attempt budget or deadline runs out, then `expired` and the poster's credits are refunded minus screening fees.
+- `failed` returns the job to the same runner (`claimed`) while its claim has attempts left (D23). After the last attempt the claim ends, the stake is returned, and the job goes back to `open` until the deadline runs out, then `expired` and the poster's credits are refunded minus screening fees.
 - Terminal states are immutable.
 
 ## Trust layer
@@ -121,8 +121,10 @@ Rules:
 
 - 1 credit = 1 minute of agent work, the same for every model.
 - On post: the job's budget plus screening and test fees are held from the poster.
-- On claim: the runner's stake is held.
+- On claim: the runner's stake is held (20% of the budget, at least 1 credit; D24).
 - On pass: the result is released, budget goes to the runner, stake is returned.
+- On claim timeout: half the stake is slashed; the rest is returned.
+- On a claim that ends after its last failed attempt: the stake is returned.
 - On trap failure: stake is slashed, reputation drops sharply; repeated failures burn the runner.
 - Posters see only pass/fail and diagnostics before release, never the result.
 - Ledger is double-entry and append-only. No balance is ever edited directly.
@@ -171,6 +173,7 @@ list_jobs(types?, max_model_size?, min_reward?)
 claim_job(job_id)
 submit_result(job_id, result, idempotency_key)
 get_status(job_id)
+get_balance()
 stream_logs(job_id)
 cancel_job(job_id)
 ```
@@ -241,5 +244,4 @@ The demo must-haves, stretch goals and roadmap cuts are in [`technical.md`](tech
 
 ## Open questions
 
-1. Starting credit grant for new owners, default stake size, fee amounts.
-2. How runners get a stake on day one (starter grant, or must run trap jobs first).
+1. Fee amounts for screening and test review (starting credits and stake size are settled in D24).

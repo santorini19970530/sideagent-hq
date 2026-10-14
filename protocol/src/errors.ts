@@ -7,6 +7,7 @@ export const ErrorCode = z.enum([
   "forbidden",
   "conflict",
   "invalid_state",
+  "insufficient_credits",
   "spec_not_checkable",
   "rate_limited",
   "internal",

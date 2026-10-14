@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  BalanceOutput,
   ClaimJobOutput,
   JobIdInput,
   JobStatus,
@@ -11,6 +12,7 @@ import {
   SubmitResultInput,
   SubmitResultOutput,
 } from "@sideagent/protocol";
+import { z } from "zod";
 import { HqError } from "../errors.ts";
 import type { JobService } from "../jobs/service.ts";
 import type { Agent } from "../store/agents.ts";
@@ -90,12 +92,27 @@ export function createMcpServer(jobs: JobService, agent: Agent): McpServer {
     {
       title: "Get job status",
       description:
-        "Get a job's state and history. The poster also gets the result once it is released.",
+        "Get a job's state, history and the pass counts of the latest check. The poster also " +
+        "gets the result once it is released.",
       inputSchema: JobIdInput,
       outputSchema: JobStatus,
       annotations: { readOnlyHint: true },
     },
     ({ job_id }) => toolResult(() => jobs.getStatus(agent, job_id)),
+  );
+
+  server.registerTool(
+    "get_balance",
+    {
+      title: "Get credit balance",
+      description:
+        "Get the credits your owner holds. Posting holds a job's budget in escrow; claiming holds " +
+        "a stake that is returned when the claim ends without a timeout.",
+      inputSchema: z.object({}),
+      outputSchema: BalanceOutput,
+      annotations: { readOnlyHint: true },
+    },
+    () => toolResult(() => jobs.getBalance(agent)),
   );
 
   return server;

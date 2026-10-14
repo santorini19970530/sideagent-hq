@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { ApiError, TestSummary } from "@sideagent/protocol";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createDockerSandbox, DOCKER_RUN_FLAGS } from "../src/sandbox/docker.ts";
 
 const IMAGE = "sideagent-sandbox-python:dev";
 const CONTEXT = resolve(import.meta.dirname, "../../images/python-sandbox");
@@ -15,19 +16,7 @@ const hasDocker = spawnSync("docker", ["info"], { stdio: "ignore" }).status === 
 if (process.env.CI && !hasDocker) throw new Error("CI needs Docker for the sandbox tests");
 
 // The isolation flags HQ and laptop runners start the image with (technical.md, "Test sandbox").
-const RUN_FLAGS = [
-  "--rm",
-  "--network=none",
-  "--read-only",
-  "--tmpfs=/tmp:size=64m",
-  "--cap-drop=ALL",
-  "--security-opt=no-new-privileges",
-  "--user=10001",
-  "--pids-limit=128",
-  "--memory=512m",
-  "--cpus=1",
-  "--init",
-];
+const RUN_FLAGS = DOCKER_RUN_FLAGS;
 
 type Files = Record<string, string>;
 
@@ -248,6 +237,73 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
       const { summary, error } = await check({ ...TESTS, "result/solution.py": forge });
       expect(summary).toMatchObject({ passed: 0, total: 4 });
       expect(error).toBeUndefined();
+    });
+  });
+
+  describe("HQ docker sandbox", () => {
+    const sandbox = createDockerSandbox({ image: IMAGE, timeoutSeconds: 120 });
+    const bundle = (result: string, hidden = TESTS["tests/hidden/test_hidden.py"]!) => ({
+      jobId: "job",
+      checkId: "check",
+      runtime: "python" as const,
+      result: [{ path: "solution.py", content: result }],
+      publicTests: [{ path: "test_public.py", content: TESTS["tests/public/test_public.py"]! }],
+      hiddenTests: [{ path: "test_hidden.py", content: hidden }],
+      trapTests: [],
+    });
+
+    it("scores a correct and a wrong result", async () => {
+      expect(await sandbox.runChecks(bundle(SOLUTION))).toEqual({
+        kind: "scored",
+        summary: {
+          passed: 3,
+          total: 3,
+          categories: { hidden: { passed: 2, total: 2 }, public: { passed: 1, total: 1 } },
+        },
+      });
+      expect(await sandbox.runChecks(bundle(WRONG))).toMatchObject({
+        kind: "scored",
+        summary: { passed: 0, total: 3 },
+      });
+    });
+
+    it("gives the tests no network and none of HQ's environment", async () => {
+      process.env[SECRET] = "leaked";
+      try {
+        const probe = [
+          "import os, socket, pytest",
+          "def test_no_network():",
+          "    with pytest.raises(OSError):",
+          "        socket.create_connection(('1.1.1.1', 53), timeout=3)",
+          "def test_no_hq_env():",
+          `    assert '${SECRET}' not in os.environ`,
+        ].join("\n");
+        expect(await sandbox.runChecks(bundle(SOLUTION, probe))).toMatchObject({
+          kind: "scored",
+          summary: { categories: { hidden: { passed: 2, total: 2 } } },
+        });
+      } finally {
+        delete process.env[SECRET];
+      }
+    });
+
+    it("returns a rejection instead of throwing", async () => {
+      const outcome = await sandbox.runChecks({
+        ...bundle(SOLUTION),
+        result: [
+          { path: "solution.py", content: SOLUTION },
+          { path: "conftest.py", content: "" },
+        ],
+      });
+      expect(outcome).toMatchObject({ kind: "rejected", error: { code: "invalid_request" } });
+    });
+
+    it("throws when the sandbox can't run", async () => {
+      const missing = createDockerSandbox({
+        image: "sideagent-no-such-image:dev",
+        timeoutSeconds: 60,
+      });
+      await expect(missing.runChecks(bundle(SOLUTION))).rejects.toThrow(/docker run failed/);
     });
   });
 

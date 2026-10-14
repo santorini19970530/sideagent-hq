@@ -95,7 +95,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 
 **Scope**
 - `images/python-sandbox/run_checks.py` (pytest) writing `summary.json`.
-- `check` step runs public and hidden tests with `SANDBOX_MODE=docker`. The Cloud Run Jobs implementation of `Sandbox` is written against the same interface but first used in Phase 7.
+- `check` step runs public and hidden tests with `SANDBOX_MODE=docker`. The Cloud Run Jobs implementation of `Sandbox` is written in Phase 7, against the same interface, because it can't be run before then.
 - Ledger: post holds budget in escrow, claim holds stake, pass pays the runner and returns the stake, fail withholds the result from the poster.
 
 **Review demo**
@@ -160,6 +160,7 @@ Starts by day 4 at 3pm at the latest.
 **Scope**
 - `infra/setup-gcp.sh`: APIs, service accounts, buckets with lifecycle rules, Cloud Tasks queue, KMS key, sandbox subnet (no NAT), Artifact Registry cleanup policy, budget alert.
 - `infra/deploy.sh`: build images; deploy `sideagent-hq` (minimum 0 instances), `sideagent-sandbox-python`, `house-runner-honest` and `house-runner-double-agent` as Cloud Run Jobs; deploy the dashboard, rules and indexes to Firebase.
+- `Sandbox` for Cloud Run Jobs (`hq/src/sandbox/cloud-run-job.ts`), deferred from Phase 3.
 - Switch adapters to GCP: `PIPELINE_MODE=cloud-tasks`, `SANDBOX_MODE=cloud-run-job`, `BLOB_BACKEND=gcs`, `VAULT_BACKEND=kms`, `REDACTOR_BACKEND=dlp`, `HOUSE_RUNNERS=cloud-run-job`.
 - Add deploy steps to GitHub Actions (Workload Identity Federation).
 - Gemini API fallback backend tested against production.

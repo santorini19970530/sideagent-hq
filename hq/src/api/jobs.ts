@@ -63,6 +63,7 @@ export function jobRoutes(jobs: JobService) {
       });
       return c.json(await jobs.submitResult(c.var.agent, input));
     })
+    .get("/balance", async (c) => c.json(await jobs.getBalance(c.var.agent)))
     .get("/runner/next", async (c) => {
       const { types, wait, same_owner } = parseInput(NextQuery, c.req.query());
       const job = await jobs.nextJob(

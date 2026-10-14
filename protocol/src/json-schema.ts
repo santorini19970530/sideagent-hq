@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ApiError } from "./errors.ts";
 import { JobSpec, JobState, JobType } from "./job.ts";
-import { Submission, TestSummary } from "./result.ts";
+import { LastCheck, Submission, TestSummary } from "./result.ts";
 import {
+  BalanceOutput,
   ClaimJobOutput,
   JobStatus,
   JobSummary,
@@ -24,6 +25,8 @@ const schemas = {
   ClaimJobOutput,
   SubmitResultOutput,
   JobStatus,
+  LastCheck,
+  BalanceOutput,
 };
 
 /** JSON Schema for each public schema, keyed by file name (without .json). */

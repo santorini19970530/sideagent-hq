@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type {
+  BalanceOutput,
   ClaimJobOutput,
   CodeFile,
   JobEvent,
@@ -20,6 +21,14 @@ import type { PipelineRunner } from "../adapters/pipeline/types.ts";
 import type { Config } from "../config.ts";
 import { HqError } from "../errors.ts";
 import { sha256Hex } from "../hash.ts";
+import {
+  accounts,
+  balanceInTx,
+  balanceOf,
+  requireCredits,
+  stakeFor,
+  transfer,
+} from "../ledger/ledger.ts";
 import type { Agent, AgentRole } from "../store/agents.ts";
 import {
   appendEvent,
@@ -42,7 +51,10 @@ export interface JobServiceDeps {
   db: Firestore;
   blobs: BlobStore;
   pipeline: PipelineRunner;
-  config: Pick<Config, "CLAIM_TTL_SECONDS" | "CLAIM_ATTEMPTS">;
+  config: Pick<
+    Config,
+    "CLAIM_TTL_SECONDS" | "CLAIM_ATTEMPTS" | "STAKE_PERCENT" | "TIMEOUT_SLASH_PERCENT"
+  >;
   now?: () => Date;
 }
 
@@ -81,9 +93,11 @@ export function createJobService({
         : null,
     ]);
 
+    const ownerAccount = accounts.owner(agent.ownerId);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists) return replayJob(jobId, snap.data() as JobDoc, requestHash);
+      requireCredits(await balanceInTx(tx, db, ownerAccount), input.budget, "This job's budget");
       const ts = Timestamp.fromDate(at);
       const job: JobDoc = {
         posterAgentId: agent.id,
@@ -98,6 +112,7 @@ export function createJobService({
         deadline: Timestamp.fromDate(new Date(input.deadline)),
         claim: null,
         passedSubmissionId: null,
+        lastCheck: null,
         idempotencyKey: input.idempotency_key,
         requestHash,
         eventSeq: 0,
@@ -108,6 +123,18 @@ export function createJobService({
       transition(tx, ref, job, "open", "Open for claims", ts);
       tx.create(ref, job);
       tx.create(ref.collection("private").doc("main"), { hiddenTestsRef, referenceSolutionRef });
+      transfer(
+        tx,
+        db,
+        {
+          from: ownerAccount,
+          to: accounts.escrow(jobId),
+          amount: input.budget,
+          jobId,
+          reason: "Budget held in escrow",
+        },
+        ts,
+      );
       return toSummary(jobId, job);
     });
   }
@@ -155,7 +182,7 @@ export function createJobService({
     { sameOwner = false }: { sameOwner?: boolean } = {},
   ): Promise<ClaimJobOutput> {
     requireRole(agent, "runner");
-    const { job, claim } = await updateJob(db, jobId, now(), (u) => {
+    const { job, claim } = await updateJob(db, jobId, now(), async (u) => {
       if (sameOwner && u.job.posterOwnerId !== agent.ownerId) {
         throw new HqError(
           "forbidden",
@@ -163,7 +190,11 @@ export function createJobService({
           "The dev command executor only claims jobs posted by your own owner",
         );
       }
-      expireClaimIfDue(u);
+      // Read before expireClaimIfDue, which writes; Firestore needs every read first.
+      const ownerAccount = accounts.owner(agent.ownerId);
+      let balance = await balanceInTx(u.tx, db, ownerAccount);
+      const refund = expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
+      if (refund?.ownerId === agent.ownerId) balance += refund.amount;
       // A retried claim by the same runner returns the existing claim.
       const held = u.job.claim;
       if (held?.runnerAgentId === agent.id) return { job: u.job, claim: held };
@@ -181,14 +212,30 @@ export function createJobService({
         u.at.toMillis() + config.CLAIM_TTL_SECONDS * 1000,
         u.job.deadline.toMillis(),
       );
+      const stake = stakeFor(u.job.budget, config.STAKE_PERCENT);
+      requireCredits(balance, stake, "The stake for this job");
       const claim = {
         runnerAgentId: agent.id,
+        runnerOwnerId: agent.ownerId,
+        stake,
         claimedAt: u.at,
         deadline: Timestamp.fromMillis(deadlineMs),
         attemptsLeft: config.CLAIM_ATTEMPTS,
       };
       u.job.claim = claim;
       u.move("claimed", `Claimed by runner ${agent.id}`);
+      transfer(
+        u.tx,
+        db,
+        {
+          from: ownerAccount,
+          to: accounts.stake(jobId, agent.id),
+          amount: stake,
+          jobId,
+          reason: "Stake held for the claim",
+        },
+        u.at,
+      );
       return { job: u.job, claim };
     });
     return {
@@ -213,7 +260,10 @@ export function createJobService({
     const existing = await subRef.get();
     if (existing.exists) {
       const job = await jobRef(db, jobId).get();
-      return replaySubmission(jobId, submissionId, existing.data()!, requestHash, job.get("state"));
+      const state = job.get("state") as JobState;
+      return enqueueCheck(
+        replaySubmission(jobId, submissionId, existing.data()!, requestHash, state),
+      );
     }
 
     const resultRef = await putJson(
@@ -226,7 +276,7 @@ export function createJobService({
       if (snap.exists) {
         return replaySubmission(jobId, submissionId, snap.data()!, requestHash, u.job.state);
       }
-      expireClaimIfDue(u);
+      expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
       const claim = u.job.claim;
       const fixHint = "Claim the job with claim_job before submitting; get_status shows its state";
       if (claim?.runnerAgentId !== agent.id) {
@@ -242,6 +292,7 @@ export function createJobService({
       u.tx.create(subRef, {
         runnerAgentId: agent.id,
         resultRef,
+        outcome: null,
         testSummary: null,
         idempotencyKey: input.idempotency_key,
         requestHash,
@@ -256,8 +307,14 @@ export function createJobService({
         attempts_left: claim.attemptsLeft,
       };
     });
-    // Steps are idempotent, so re-enqueueing on a replay recovers a check that never ran.
-    if (out.state === "submitted") await pipeline.enqueue("check", { jobId, submissionId });
+    return enqueueCheck(out);
+  }
+
+  /** Steps are idempotent, so re-enqueueing on a replay recovers a check that never finished. */
+  async function enqueueCheck(out: SubmitResultOutput): Promise<SubmitResultOutput> {
+    if (out.state === "submitted" || out.state === "checking") {
+      await pipeline.enqueue("check", { jobId: out.job_id, submissionId: out.submission_id });
+    }
     return out;
   }
 
@@ -271,7 +328,7 @@ export function createJobService({
     // Only an expired claim needs a write; plain reads keep polling off the transaction path.
     if (claimExpired(job, Timestamp.fromDate(now()))) {
       job = await updateJob(db, jobId, now(), (u) => {
-        expireClaimIfDue(u);
+        expireClaimIfDue(u, config.TIMEOUT_SLASH_PERCENT);
         return u.job;
       });
       events = await eventsQuery.get();
@@ -294,6 +351,20 @@ export function createJobService({
         attempts_left: job.claim.attemptsLeft,
       };
     }
+    if (job.lastCheck && role !== "observer") {
+      const { submissionId, outcome, summary } = job.lastCheck;
+      status.last_check = {
+        submission_id: submissionId,
+        outcome,
+        ...(summary ? { summary } : {}),
+      };
+      // The reason quotes the runner's own file names, so only the runner sees it.
+      if (role === "runner" && outcome === "rejected") {
+        const sub = await ref.collection("submissions").doc(submissionId).get();
+        const reason = sub.get("rejectedReason") as string | null;
+        if (reason) status.last_check.reason = reason;
+      }
+    }
     // Posters never see a result before it passes and is released.
     if (role === "poster" && job.state === "released" && job.passedSubmissionId) {
       const sub = await jobRef(db, jobId)
@@ -305,7 +376,11 @@ export function createJobService({
     return status;
   }
 
-  return { postJob, listJobs, nextJob, claimJob, submitResult, getStatus };
+  async function getBalance(agent: Agent): Promise<BalanceOutput> {
+    return { balance: await balanceOf(db, accounts.owner(agent.ownerId)) };
+  }
+
+  return { postJob, listJobs, nextJob, claimJob, submitResult, getStatus, getBalance };
 }
 
 function requireRole(agent: Agent, role: AgentRole): void {

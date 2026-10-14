@@ -1,5 +1,5 @@
 // Phase 1 runner stand-in: waits for an open job, claims it, submits a stub file and
-// follows the job to `released`. Run with `pnpm demo:runner` after `pnpm --filter @sideagent/hq seed`.
+// follows the job until its check finishes. Run with `pnpm demo:runner` after `pnpm --filter @sideagent/hq seed`.
 const hq = process.env.SIDEAGENT_HQ_URL ?? "http://localhost:8080";
 const apiKey = process.env.SIDEAGENT_API_KEY;
 if (!apiKey) throw new Error("Set SIDEAGENT_API_KEY to a runner key from the seed script");
@@ -31,10 +31,14 @@ const submitted = await call("POST", `/jobs/${job.job_id}/submissions`, {
 console.log(`Submitted ${submitted.submission_id}`);
 
 let state = submitted.state;
-while (state !== "released") {
+while (["submitted", "checking", "passed"].includes(state)) {
   await new Promise((r) => setTimeout(r, 500));
   const status = await call("GET", `/jobs/${job.job_id}`);
   if (status.state !== state) console.log(`State: ${state} → ${status.state}`);
   state = status.state;
 }
-console.log("Done. The poster can now read the result with get_status.");
+console.log(
+  state === "released"
+    ? "Done. The poster can now read the result with get_status."
+    : `Check finished with the job ${state}; get_status shows the counts in last_check.`,
+);

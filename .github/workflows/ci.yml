@@ -21,7 +21,6 @@ jobs:
           distribution: temurin
           java-version: "21"
       - run: pnpm install --frozen-lockfile
-      - run: python3 -m pip install --break-system-packages pytest
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test

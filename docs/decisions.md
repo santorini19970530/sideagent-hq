@@ -162,3 +162,17 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** A small image builds and cold-starts fast, and every package in it is code that runs next to untrusted results. Choosing which third-party packages to allow is a policy question the prototype doesn't need.
 
 **Trade-off:** Jobs that need numpy, pandas or similar can't be posted yet. A per-job package list (installed from a vetted mirror before the network is cut) is a roadmap item.
+
+## D23. A failed check goes back to the same runner while it has attempts left (2026-10-15)
+
+**Decision:** When a submission fails its checks, the job moves `failed → claimed` and stays with the runner while its claim has attempts left (default 3). The runner and the poster see only pass counts per category in `last_check`; the runner alone sees why a result was rejected. After the last failed attempt the claim ends, the stake is returned in full, and the job goes back to `open`.
+
+**Why:** The per-claim attempt limit in `design.md` only makes sense if a runner can retry under its claim. Returning the stake on an honest failure keeps hard jobs worth claiming; stakes are for timeouts and (from Phase 5) trap failures.
+
+**Rejected:** reopening the job on every failure (attempts per claim never used); slashing on the last failed attempt (punishes honest runners on hard jobs; spam is limited by the attempt cap).
+
+## D24. Starting credits 100, stake 20% of the budget (2026-10-15)
+
+**Decision:** New owners get 100 credits from `platform:grants`. A claim holds a stake of 20% of the budget, at least 1 credit. A claim timeout slashes half the stake to `platform:fees`. All three are config (`STARTING_CREDITS`, `STAKE_PERCENT`, `TIMEOUT_SLASH_PERCENT`). Fees for screening and test review come with Phase 5.
+
+**Why:** Enough for several demo jobs per owner without reseeding, and a stake that grows with the job's value. Answers design.md open questions 1–2 for the prototype.

@@ -1,8 +1,31 @@
 import { ApiError, ClaimJobOutput, JobStatus, JobSummary } from "@sideagent/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { createHarness } from "./harness.ts";
+import { createHarness, SOLUTION, WRONG } from "./harness.ts";
 
 const h = createHarness();
+
+async function balance(key: string): Promise<number> {
+  return (await h.call(key, "GET", "/v1/balance")).body.balance;
+}
+
+async function submit(key: string, jobId: string, content: string, idempotencyKey: string) {
+  const res = await h.call(key, "POST", `/v1/jobs/${jobId}/submissions`, {
+    result: [{ path: "solution.py", content }],
+    idempotency_key: idempotencyKey,
+  });
+  expect(res.status).toBe(200);
+  return res;
+}
+
+/** Waits until the check has run, then returns the job's status as seen by `key`. */
+async function settled(key: string, jobId: string): Promise<JobStatus> {
+  let status: JobStatus | undefined;
+  await vi.waitFor(async () => {
+    status = JobStatus.parse((await h.call(key, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(["submitted", "checking", "passed"]).not.toContain(status.state);
+  });
+  return status!;
+}
 
 async function postedJob() {
   const keys = await h.agents();
@@ -91,22 +114,16 @@ describe("claim and submit", () => {
     const before = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     expect(before.result).toBeUndefined();
 
-    const submit = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/submissions`, {
-      result: [{ path: "solution.py", content: "def add(a, b):\n    return a + b\n" }],
-      idempotency_key: "s1",
-    });
-    expect(submit.status).toBe(200);
-    expect(submit.body).toMatchObject({ state: "submitted", attempts_left: 2 });
+    const submitted = await submit(keys.runner, jobId, SOLUTION, "s1");
+    expect(submitted.body).toMatchObject({ state: "submitted", attempts_left: 2 });
 
-    await vi.waitFor(
-      async () => {
-        const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
-        expect(status.body.state).toBe("released");
-      },
-      { timeout: 15_000 },
-    );
-    const poster = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    const poster = await settled(keys.poster, jobId);
+    expect(poster.state).toBe("released");
     expect(poster.result?.[0]?.content).toContain("return a + b");
+    expect(poster.last_check).toMatchObject({
+      outcome: "passed",
+      summary: { passed: 2, total: 2 },
+    });
     expect(poster.events.map((e) => e.to)).toEqual([
       "draft",
       "open",
@@ -127,26 +144,113 @@ describe("claim and submit", () => {
     expect(observer.claim).toBeUndefined();
   });
 
-  it("does not release a wrong answer", async () => {
+  it("withholds a wrong answer and gives the job back to the runner with counts only", async () => {
     const { keys, jobId } = await postedJob();
     await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
-    const submit = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/submissions`, {
-      result: [{ path: "solution.py", content: "def add(a, b):\n    return None\n" }],
-      idempotency_key: "wrong",
-    });
-    expect(submit.status).toBe(200);
+    await submit(keys.runner, jobId, WRONG, "wrong");
 
-    await vi.waitFor(
-      async () => {
-        const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
-        expect(status.body.state).toBe("failed");
-      },
-      { timeout: 15_000 },
-    );
-    const poster = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    const poster = await settled(keys.poster, jobId);
+    expect(poster.state).toBe("claimed");
     expect(poster.result).toBeUndefined();
-    expect(poster.events.map((e) => e.to)).toContain("failed");
-    expect(poster.events.map((e) => e.to)).not.toContain("released");
+    expect(poster.events.map((e) => e.to).slice(-4)).toEqual([
+      "submitted",
+      "checking",
+      "failed",
+      "claimed",
+    ]);
+    expect(poster.last_check).toEqual({
+      submission_id: expect.any(String),
+      outcome: "failed",
+      summary: {
+        passed: 0,
+        total: 2,
+        categories: { hidden: { passed: 0, total: 1 }, public: { passed: 0, total: 1 } },
+      },
+    });
+
+    const runner = JobStatus.parse((await h.call(keys.runner, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(runner.claim?.attempts_left).toBe(2);
+    await submit(keys.runner, jobId, SOLUTION, "right");
+    expect((await settled(keys.poster, jobId)).state).toBe("released");
+  });
+
+  it("reopens the job and returns the stake when the attempts run out", async () => {
+    const { keys, jobId } = await postedJob();
+    const before = await balance(keys.runner);
+    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    expect(await balance(keys.runner)).toBe(before - 2);
+    for (let i = 0; i < h.config.CLAIM_ATTEMPTS; i++) {
+      await submit(keys.runner, jobId, WRONG, `wrong-${i}`);
+      await settled(keys.poster, jobId);
+    }
+    const status = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(status.state).toBe("open");
+    expect(status.claim).toBeUndefined();
+    expect(await balance(keys.runner)).toBe(before);
+  });
+
+  it("shows why a result was rejected to the runner only", async () => {
+    const { keys, jobId } = await postedJob();
+    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    h.sandbox.next = async () => ({
+      kind: "rejected",
+      error: {
+        code: "invalid_request",
+        reason: "conftest.py can't be part of a result",
+        fix_hint: "",
+      },
+    });
+    await submit(keys.runner, jobId, WRONG, "rejected");
+
+    const poster = await settled(keys.poster, jobId);
+    expect(poster.last_check).toEqual({ submission_id: expect.any(String), outcome: "rejected" });
+    expect(JSON.stringify(poster)).not.toContain("conftest");
+    const runner = JobStatus.parse((await h.call(keys.runner, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(runner.last_check?.reason).toContain("conftest.py");
+  });
+
+  it("keeps the job in checking when the sandbox fails, and a retried submit resumes it", async () => {
+    const { keys, jobId } = await postedJob();
+    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    h.sandbox.next = async () => {
+      throw new Error("docker is down");
+    };
+    await submit(keys.runner, jobId, SOLUTION, "s1");
+    await vi.waitFor(async () => {
+      const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
+      expect(status.body.state).toBe("checking");
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body.state).toBe("checking");
+
+    const replay = await submit(keys.runner, jobId, SOLUTION, "s1");
+    expect(replay.body.attempts_left).toBe(2);
+    expect((await settled(keys.poster, jobId)).state).toBe("released");
+  });
+
+  it("does not re-check an older submission when its submit is retried", async () => {
+    const { keys, jobId } = await postedJob();
+    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    await submit(keys.runner, jobId, WRONG, "first");
+    const first = await settled(keys.poster, jobId);
+    h.sandbox.next = async () => {
+      throw new Error("docker is down");
+    };
+    await submit(keys.runner, jobId, SOLUTION, "second");
+    await vi.waitFor(async () => {
+      expect((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body.state).toBe("checking");
+    });
+
+    await submit(keys.runner, jobId, WRONG, "first");
+    await new Promise((r) => setTimeout(r, 200));
+    const during = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(during.state).toBe("checking");
+    expect(during.last_check).toEqual(first.last_check);
+
+    await submit(keys.runner, jobId, SOLUTION, "second");
+    const done = await settled(keys.poster, jobId);
+    expect(done.state).toBe("released");
+    expect(done.last_check?.submission_id).not.toBe(first.last_check?.submission_id);
   });
 
   it("never shows hidden tests or the reference solution to runners", async () => {
@@ -156,7 +260,10 @@ describe("claim and submit", () => {
       await h.call(keys.runner, "GET", "/v1/runner/next?wait=0"),
       await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`),
       await h.call(keys.runner, "GET", `/v1/jobs/${jobId}`),
+      await submit(keys.runner, jobId, WRONG, "wrong"),
     ];
+    await settled(keys.runner, jobId);
+    responses.push(await h.call(keys.runner, "GET", `/v1/jobs/${jobId}`));
     for (const res of responses) {
       expect(res.text).not.toMatch(
         /HIDDEN_MARKER|REFERENCE_MARKER|hidden_tests|reference_solution/,
@@ -184,7 +291,7 @@ describe("claim and submit", () => {
   it("counts a repeated submission once", async () => {
     const { keys, jobId } = await postedJob();
     await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
-    const body = { result: [{ path: "solution.py", content: "x = 1\n" }], idempotency_key: "k" };
+    const body = { result: [{ path: "solution.py", content: SOLUTION }], idempotency_key: "k" };
     const first = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/submissions`, body);
     const second = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/submissions`, body);
     expect(second.body.submission_id).toBe(first.body.submission_id);
@@ -200,6 +307,36 @@ describe("claim and submit", () => {
     });
     expect(res.status).toBe(409);
     expect(ApiError.parse(res.body).code).toBe("invalid_state");
+  });
+});
+
+describe("escrow and stakes", () => {
+  it("holds the budget on post and pays it to the runner's owner on release", async () => {
+    const posterKeys = await h.agents();
+    const runnerKeys = await h.agents();
+    const posted = await h.call(posterKeys.poster, "POST", "/v1/jobs", h.jobSpec({ budget: 10 }));
+    const jobId = posted.body.job_id;
+    expect(await balance(posterKeys.poster)).toBe(90);
+
+    await h.call(runnerKeys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    expect(await balance(runnerKeys.runner)).toBe(98);
+    await submit(runnerKeys.runner, jobId, SOLUTION, "s1");
+    expect((await settled(posterKeys.poster, jobId)).state).toBe("released");
+    expect(await balance(posterKeys.poster)).toBe(90);
+    expect(await balance(runnerKeys.runner)).toBe(110);
+  });
+
+  it("refuses a post or claim the owner can't cover", async () => {
+    const poor = await h.agents(5);
+    const post = await h.call(poor.poster, "POST", "/v1/jobs", h.jobSpec({ budget: 10 }));
+    expect(post.status).toBe(402);
+    expect(ApiError.parse(post.body).code).toBe("insufficient_credits");
+
+    const { jobId } = await postedJob();
+    const broke = await h.agents(0);
+    const claim = await h.call(broke.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    expect(claim.status).toBe(402);
+    expect((await h.call(broke.runner, "GET", `/v1/jobs/${jobId}`)).body.state).toBe("open");
   });
 });
 
@@ -227,6 +364,8 @@ describe("claim timeout", () => {
 
       const reclaim = await h.call(keys.otherRunner, "POST", `/v1/jobs/${jobId}/claim`);
       expect(reclaim.status).toBe(200);
+      // Stake 2 held twice; half of the first one was slashed.
+      expect(await balance(keys.runner)).toBe(h.config.STARTING_CREDITS - 10 - 1 - 2);
     } finally {
       h.clock.now = started;
     }

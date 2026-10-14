@@ -3,7 +3,6 @@ import type { Config } from "../config.ts";
 import { createCheckStep } from "../pipeline/check.ts";
 import { createReleaseStep } from "../pipeline/release.ts";
 import { createDockerSandbox } from "../sandbox/docker.ts";
-import { createPythonSandbox } from "../sandbox/python.ts";
 import type { Sandbox } from "../sandbox/types.ts";
 import { createFirestore } from "../store/firestore.ts";
 import { createLocalBlobStore } from "./blob/local.ts";
@@ -22,14 +21,20 @@ function notYet(name: string, mode: string): never {
   throw new Error(`${name}=${mode} is available from Phase 7; use the local default`);
 }
 
-export function createAdapters(config: Config): Adapters {
+/** `overrides.sandbox` lets tests swap in a fake so they don't need Docker. */
+export function createAdapters(config: Config, overrides: { sandbox?: Sandbox } = {}): Adapters {
   if (config.BLOB_BACKEND !== "local") notYet("BLOB_BACKEND", config.BLOB_BACKEND);
   if (config.PIPELINE_MODE !== "inline") notYet("PIPELINE_MODE", config.PIPELINE_MODE);
-  if (config.SANDBOX_MODE === "cloud-run-job") notYet("SANDBOX_MODE", config.SANDBOX_MODE);
+  if (config.SANDBOX_MODE !== "docker") notYet("SANDBOX_MODE", config.SANDBOX_MODE);
 
   const db = createFirestore(config);
   const blobs = createLocalBlobStore(config.BLOB_LOCAL_DIR);
-  const sandbox = config.SANDBOX_MODE === "docker" ? createDockerSandbox() : createPythonSandbox();
+  const sandbox =
+    overrides.sandbox ??
+    createDockerSandbox({
+      image: config.SANDBOX_IMAGE,
+      timeoutSeconds: config.SANDBOX_TIMEOUT_SECONDS,
+    });
   // Step handlers are registered as each phase adds them.
   const pipeline: PipelineRunner = createInlinePipeline({
     check: createCheckStep(db, blobs, sandbox, {

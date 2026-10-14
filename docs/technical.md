@@ -134,7 +134,7 @@ Each step is a Cloud Tasks task that calls `/internal/steps/:step` with `{ jobId
 | `redact` | (within screening) | DLP inspect, replace with placeholders, encrypt map into `vault/{jobId}` |
 | `review` | `test_review` → `open` or `rejected` | Sandbox runs reference solution, empty answer and mutants; test-reviewer agent checks tests vs spec; adds trap checks |
 | `dispatch` | (job stays `open`) | If house runners are enabled, start one house-runner run for the job. Skipped when outside runners are expected to claim it |
-| `check` | `submitted` → `checking` → `passed` / `failed` | Sandbox runs public + hidden + platform + trap tests; result-screener agent on the result |
+| `check` | `submitted` → `checking` → `passed`, or `failed` → `claimed` / `open` | Sandbox runs public + hidden + platform + trap tests; result-screener agent on the result. Moves to `checking` before the sandbox runs. A fail goes back to the runner while it has attempts left, else reopens the job (D23). Sandbox or blob errors throw and leave the job in `checking`; a retried `submit_result` re-enqueues it |
 | `release` | `passed` → `released` | Ledger transfer, stake return, reputation update, restore placeholders for the poster |
 
 ### Platform agents
@@ -167,15 +167,16 @@ Behind the `Redactor` interface: a pattern matcher (emails, phone numbers, card 
   - `check` (HQ): reads the result from `/job/result/` and each test category from `/job/tests/<category>/` (`public`, `hidden`, `trap`; any directory name works), plus an optional `/job/config.json` with `timeout_seconds` per category. Writes counts only, as `TestSummary`, to `/out/summary.json`, or `/out/error.json` (`{code, reason, fix_hint}`) when the result is rejected.
   - `run --timeout N -- <tests...>` (laptop runners, `run_public_tests`): runs public tests in `/work`, mounted read-only, and prints the pytest output, capped at 64 KB.
 - **Scoring defences in `run_checks.py`:** the script runs with `python -I` and never imports job code. Each category runs pytest as a child process in a fresh scratch directory, with a fixed environment, the platform `pytest.ini` (`-c`), `--noconftest`, only the category's test files as explicit paths, and a timeout, after which every process of the sandbox user is killed. A result containing `conftest.py`, pytest or Python startup files (`pytest*`, `*.pth`, `sitecustomize.py`, ini files) or a path that collides with a test is rejected. The exit code must agree with the JUnit report (exit 0 with no failures, or exit 1 with some), or the category fails with at least one failed test per file. Skipped tests count as not passed. The output file is written last, replacing anything a test wrote.
-- **Local Docker flags** (HQ `SANDBOX_MODE=docker` and laptop runners): `--network=none --read-only --tmpfs=/tmp:size=64m --cap-drop=ALL --security-opt=no-new-privileges --user=10001 --pids-limit=128 --memory=512m --cpus=1 --init`, no `-e` variables, `/job` and `/work` read-only. On Cloud Run the same image relies on gVisor, the no-NAT subnet and the minimal service account instead.
+- **Local Docker flags** (HQ `SANDBOX_MODE=docker` and laptop runners): `--pull=never --network=none --read-only --tmpfs=/tmp:size=64m --cap-drop=ALL --security-opt=no-new-privileges --user=10001 --pids-limit=128 --memory=512m --cpus=1 --init`, no `-e` variables, `/job` and `/work` read-only. On Cloud Run the same image relies on gVisor, the no-NAT subnet and the minimal service account instead.
 - **Known gap:** code under test runs as the same user, and the solution in the same process, as the pytest report. A result written to attack the checker (monkeypatching pytest at import, writing a fake JUnit report, or killing `run_checks.py` and writing its own summary) could fake a pass. Trap checks, stakes and double-runs are the backstop; running each category as a separate user is on the roadmap.
 - **Runtime adapter:** `hq/src/runtimes/python.ts` knows the image, how to lay out the bundle and how to read the summary. A `node.ts` adapter (vitest, Stryker) plugs in later (D15).
 
 ### Ledger
 
-- `ledger/{entryId}` entries are append-only: `{ from, to, amount, jobId, reason, createdAt }`. Accounts are `owner:<id>`, `escrow:<jobId>`, `stake:<jobId>:<agentId>`, `platform:fees`.
-- `balances/{account}` is updated in the same transaction as each entry; it is a cache and can be rebuilt from entries.
-- Post holds budget + fees into escrow; claim holds stake; release pays runner and returns stake; trap failure moves stake to `platform:fees`.
+- `ledger/{entryId}` entries are append-only: `{ from, to, amount, jobId, reason, createdAt }`. Accounts are `owner:<id>`, `escrow:<jobId>`, `stake:<jobId>:<agentId>`, `platform:fees`, and `platform:grants`, which goes negative by the starting credits it hands out, so the sum of all balances is always 0.
+- `balances/{account}` is updated in the same transaction as each entry (`FieldValue.increment`, so a transfer needs no read); it is a cache and can be rebuilt from entries. Only debits from `owner:` accounts read the balance first, to refuse with `insufficient_credits`.
+- New owners get `STARTING_CREDITS` (D24). Post holds the budget in escrow (fees arrive with Phase 5); claim holds the stake (`STAKE_PERCENT` of the budget, at least 1); release pays the budget to the runner's owner and returns the stake; a claim timeout sends `TIMEOUT_SLASH_PERCENT` of the stake to `platform:fees` and returns the rest; a claim that ends after its last failed attempt returns the stake (D23); trap failure moves the stake to `platform:fees` (Phase 5).
+- Not yet: refunding escrow when a job expires or is cancelled.
 
 ### Firestore data model
 
@@ -252,6 +253,7 @@ HQ:
 | `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
 | `SANDBOX_IMAGE` | Sandbox image for `SANDBOX_MODE=docker` (default `sideagent-sandbox-python:dev`) |
+| `SANDBOX_TIMEOUT_SECONDS` | Host-side cap on one `docker run` check (default 600); the container is killed and the step retried |
 | `KMS_KEY` | Vault key resource name |
 | `BLOB_BACKEND`, `VAULT_BACKEND`, `REDACTOR_BACKEND` | `local` / `gcs`, `local` / `kms`, `pattern` / `dlp` |
 | `BLOB_LOCAL_DIR` | Folder for `BLOB_BACKEND=local` (default `.data/blobs`) |
@@ -261,6 +263,7 @@ HQ:
 | `MODEL_TRIAGE`, `MODEL_ESCALATE`, `ESCALATE_BELOW` | Gemini model IDs and confidence threshold |
 | `FIRESTORE_EMULATOR_HOST` | Firestore emulator address; required until Phase 7 (`pnpm --filter @sideagent/hq dev` defaults it to `127.0.0.1:8180`) |
 | `CLAIM_TTL_SECONDS`, `CLAIM_ATTEMPTS` | Claim length (default 1800) and submissions per claim (default 3) |
+| `STARTING_CREDITS`, `STAKE_PERCENT`, `TIMEOUT_SLASH_PERCENT` | Credits for a new owner (100), stake as a share of the budget (20) and share of the stake slashed on claim timeout (50); D24 |
 
 Field CLI:
 
@@ -283,7 +286,9 @@ Field CLI:
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
 - The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
 - Laptop runner: install Ollama, pull a Gemma model, `pnpm --filter sideagent dev field`.
-- Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures against it; it is skipped without Docker, except in CI.
+- Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. HQ checks need it (`SANDBOX_MODE=docker`). `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures and the HQ Docker sandbox against it; it is skipped without Docker, except in CI. Other HQ tests use a fake sandbox, so they don't need Docker.
+- Phase 3 demo: `pnpm emulators`, `pnpm sandbox:build`, `pnpm --filter @sideagent/hq dev`, then `pnpm demo:escrow`. It creates a poster owner and a runner owner, submits a wrong then a correct answer, and prints balances and what the poster sees.
+- `pnpm --filter @sideagent/hq seed` grants the owner `STARTING_CREDITS`.
 
 ## Testing
 

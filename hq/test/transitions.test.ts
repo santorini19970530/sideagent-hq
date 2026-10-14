@@ -13,6 +13,7 @@ describe("job transitions", () => {
     ["checking", "failed"],
     ["passed", "released"],
     ["failed", "open"],
+    ["failed", "claimed"],
   ] as const)("allows %s → %s", (from, to) => {
     expect(canTransition(from, to)).toBe(true);
   });

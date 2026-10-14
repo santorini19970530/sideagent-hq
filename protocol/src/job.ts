@@ -95,8 +95,12 @@ export const JobSpec = z
     runtime: Runtime.optional().describe("Required for code.* job types"),
     title: z.string().min(1).max(200),
     spec: z.string().min(1).max(LIMITS.maxSpecLength).describe("Task description and constraints"),
-    public_tests: Files.min(1).describe("Example tests the runner can see"),
-    hidden_tests: Files.optional().describe("Tests the runner never sees; decide pass/fail"),
+    public_tests: Files.min(1).describe(
+      "Example tests the runner can see. Python: pytest files with `def test_*` functions",
+    ),
+    hidden_tests: Files.optional().describe(
+      "Tests the runner never sees; decide pass/fail. Same format as public_tests",
+    ),
     reference_solution: Files.optional().describe("Must pass all tests"),
     budget: z.number().int().positive().describe("Credits; 1 credit = 1 minute of agent work"),
     deadline: z.iso.datetime({ offset: true }),
