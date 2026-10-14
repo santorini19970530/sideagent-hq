@@ -250,3 +250,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Trade-off:** A stranger can use up the daily cap and block the demo for the rest of the UTC day; the fix is raising `LIMIT_POSTS_PER_DAY` and redeploying. A job that uses all its checks stays open but takes no more submissions. Turning off billing stops every paid service, including Cloud Run and Firestore, until billing is turned back on by hand, and some resources may be deleted if it stays off. Whether the hackathon provides GCP credits is still unknown.
 
 **Rejected:** Per-agent post limits (an owner can make more agents); caps on agents per owner and on new owners per day (neither changes the spend bound once the platform-wide cap exists); an email allowlist (judges couldn't sign in); Cloud Armor rate limiting (needs a load balancer, against D20).
+
+## D33. Infrastructure in Terraform; images rolled out by a script (2026-10-15)
+
+**Decision:** `infra/terraform/` declares every GCP resource: APIs, the sandbox network, buckets, KMS, Artifact Registry, secrets, Firestore and its TTL policy, the Cloud Tasks queue, service accounts and IAM, the Cloud Run services and jobs, Pub/Sub and the billing budget. State is local and gitignored; the provider lock file is committed. `infra/deploy.sh` builds the images with Cloud Build and points the services and jobs at them, seeds the house-runner keys into Secret Manager once, and runs `firebase deploy` for mission control, rules and indexes. Terraform sets placeholder images and ignores image changes, so the two never fight. Teardown is `terraform destroy`. This replaces the planned `setup-gcp.sh` and `teardown.sh`.
+
+**Why:** The spend guard (D32) is a chain of linked resources (budget, topic, push subscription, function, IAM on each), which a shell script can't re-run safely or remove reliably. `terraform plan` shows exactly what is billable before anything is created, and `destroy` is a teardown that can't forget a resource. Images change on every deploy and infrastructure rarely, so they stay separate.
+
+**Trade-off:** Two tools instead of one. Some setup stays manual and is listed in `infra/terraform/README.md` (Google sign-in in Firebase Auth, importing a Firestore database that already exists). Local state means one person applies; a GCS backend is a small change if both need to.

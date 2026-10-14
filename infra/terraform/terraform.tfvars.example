@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+billing_account = "000000-000000-000000"
+
+# Defaults, shown for reference:
+# project_id     = "sideagent-hq"
+# region         = "us-west1"
+# budget_amount  = 10
+# currency_code  = "USD"
+# control_origin = "https://sideagent-hq.web.app"

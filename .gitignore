@@ -6,3 +6,11 @@ dist/
 .DS_Store
 .nuxt/
 .output/
+
+# Terraform (local state, D33). The provider lock file is committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+control/dist

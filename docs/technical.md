@@ -53,7 +53,7 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 | Cloud adapters | `BlobStore` (local folder / Cloud Storage), `Vault` (local key / Cloud KMS), `Redactor` (pattern matcher / Sensitive Data Protection), `PipelineRunner` (inline / Cloud Tasks), `Sandbox` (Docker / Cloud Run Jobs), `HouseRunnerDispatcher` (local process / Cloud Run Jobs) | Chosen by environment variables; local is the default (D19) |
 | Tests | Vitest; Firestore emulator | |
 | Lint and format | ESLint (flat config) + Prettier | |
-| CI/CD | GitHub Actions with Workload Identity Federation → Artifact Registry → `gcloud run deploy`; `firebase deploy` | No Terraform; setup is a script |
+| CI/CD | GitHub Actions with Workload Identity Federation → Artifact Registry → `gcloud run deploy`; `firebase deploy` | Infrastructure in Terraform (`infra/terraform/`, D33); images rolled out by `infra/deploy.sh` |
 
 ## Repository layout
 
@@ -85,7 +85,7 @@ field/                    sideagent  (published CLI: npx sideagent field)
   src/workspace.ts        throwaway job directory: spec + public tests in, new files out
   src/executor/           gemma-loop.ts (built-in tool-calling loop), command.ts (dev only)
   src/model/              ollama.ts, genai.ts (vertex and gemini-api) behind one interface
-  src/sandbox/            docker.ts: run_public_tests on laptops; in-process for house runners (Phase 7)
+  src/sandbox/            docker.ts: run_public_tests on laptops; process.ts: in-process for house runners
   src/config.ts           model backend and sandbox image from environment variables
   src/cheat.ts            --simulate-cheat (demo only)
   Dockerfile              house runner image (run as a Cloud Run Job)
@@ -94,9 +94,10 @@ control/                  @sideagent/control  (Nuxt dashboard)
 images/
   python-sandbox/         Dockerfile + run_checks.py (pytest, stdlib mutator); used by HQ checks and laptop runners
 infra/
-  setup-gcp.sh            enable APIs, service accounts, buckets, queue, KMS key, jobs, budget alert
-  deploy.sh               build images, deploy HQ, jobs and Firebase (Phase 7)
-  teardown.sh             delete services, jobs, queue and buckets after judging
+  terraform/              APIs, network, buckets, KMS, queue, service accounts, Cloud Run, budget (D33);
+                          `terraform destroy` is the teardown
+  deploy.sh               build images (Cloud Build), roll them out, seed house-runner keys, deploy Firebase
+  cloudbuild.yaml         the hq, field and sandbox-python images
   experiments/            day-1 throwaway checks (Gemma call, sandbox mount + no internet)
   firestore.rules
   firestore.indexes.json
@@ -151,7 +152,7 @@ Each agent is `{ prompt template, Zod output schema, model tier }`.
 
 ### Redaction
 
-Behind the `Redactor` interface, which only finds values: a pattern matcher (emails, phone numbers, Luhn-checked card numbers, numbers after "account"/"acct") locally, Sensitive Data Protection when `REDACTOR_BACKEND=dlp` (not built yet). Placeholders are assigned by our code, so both backends give the same tokens.
+Behind the `Redactor` interface, which only finds values: a pattern matcher (emails, phone numbers, Luhn-checked card numbers, numbers after "account"/"acct") locally, Sensitive Data Protection when `REDACTOR_BACKEND=dlp` (`hq/src/adapters/redactor/dlp.ts`, at the `global` location; DLP's code point offsets are converted to UTF-16, and a finding without a range fails the step closed). Placeholders are assigned by our code, so both backends give the same tokens.
 
 1. DLP `inspectContent` on spec text and inputs with a fixed infoType list (person name, email, phone, credit card, account numbers, addresses).
 2. Replace findings with `[TYPE_n]` placeholders in our code; the same value gets the same placeholder within a job.
@@ -165,7 +166,9 @@ Behind the `Redactor` interface, which only finds values: a pattern matcher (ema
 - **Input:** HQ writes the bundle (result code, public tests, hidden tests, trap tests) to `gs://<input-bucket>/<jobId>/<checkId>/`, mounted read-only at `/job`.
 - **Output:** `run_checks.py` writes `summary.json` (`passed`, `total`, per-category counts) and, when requested, `mutants.json` (`killed`, `total`) to a mounted output bucket. Only HQ reads them.
 - **Isolation:** dedicated service account with only object read on the input bucket and object write on the output bucket. Direct VPC egress (all traffic) to a subnet with no Cloud NAT, so no internet. Timeouts per check; capped number of mutants.
+- **Known gap (open, Phase 7):** the job mounts the whole input and output buckets, and only the arguments pick a check's folder. A result written to look around could read the hidden tests of another check running at the same time, or write into its output folder. Fixes, not built yet: run sandbox steps one at a time on their own queue and clear both buckets before each run, or drop the mounts and pass each execution signed URLs for its own bundle and output.
 - **Known gap:** with Private Google Access, code in the sandbox could reach Google APIs using the sandbox service account. A VPC Service Controls perimeter closes this; it is on the roadmap, not in the prototype.
+- **On Cloud Run:** the input bucket is mounted read-only at `/mnt/in` and the output bucket at `/mnt/out`; HQ starts each execution with `check --job /mnt/in/<jobId>/<checkId> --out /mnt/out/<jobId>/<checkId>` (`run` takes `--work` the same way). Cloud Run doesn't give HQ the exit code, so a result counts as scored only when the execution succeeded and `summary.json` exists; `error.json` means rejected; anything else is a sandbox failure and the step is retried. Without the success check, a result could write its own `summary.json` and kill the checker.
 - **One image, two commands.** `images/python-sandbox` (Python 3.13, hash-pinned pytest, uid 10001) serves HQ checks and laptop runners. Jobs can use the standard library and pytest only (D22).
   - `check` (HQ): reads the result from `/job/result/` and each test category from `/job/tests/<category>/` (`public`, `hidden`, `trap`; any directory name works), plus an optional `/job/config.json` with `timeout_seconds` per category and `mutants: {limit, categories}`. Writes counts only, as `TestSummary`, to `/out/summary.json`, or `/out/error.json` (`{code, reason, fix_hint}`) when the result is rejected. With `mutants`, and only if the result passes every listed category, it also writes `/out/mutants.json`: up to `limit` mutants of the result's code files (D31), each run against those categories with a 10 s timeout per run and 120 s for all mutants (later ones are left out of the score), and how many any test caught.
   - `run --timeout N -- <tests...>` (laptop runners, `run_public_tests`): runs public tests in `/work`, mounted read-only, and prints the pytest output, capped at 64 KB.
@@ -248,17 +251,21 @@ The document shapes mission control reads (`JobView`, `JobEventView`, `AgentView
 | Secret Manager | `house-runner-honest-key`, `house-runner-double-agent-key` | Runner API keys |
 | Artifact Registry | `sideagent` | Images; cleanup policy keeps the last few per image |
 | Billing budget | `sideagent` | $10/month; alert emails at 50%, 90%, 100%; notifications to Pub/Sub topic `billing-budget` (D32) |
-| Cloud Run function | `budget-guard` | Triggered by `billing-budget`: pauses the platform at 100%, turns off billing at 200% (D32). Scales to zero |
+| Cloud Run service | `budget-guard` | Private; Pub/Sub push from `billing-budget` (subscription `budget-guard-push`, never expires): pauses the platform at 100%, turns off billing at 200% (D32). Max 1 instance, scales to zero |
+| Pub/Sub topic | `billing-budget` | Budget notifications |
 | Firebase | Hosting + Auth on the same project | |
 
 ### Service accounts
 
 | Account | Grants |
 |---|---|
-| `sa-hq` | Firestore user; Cloud Tasks enqueuer; Vertex AI user; DLP user; KMS encrypt/decrypt on `vault`; Storage object admin on jobs and sandbox buckets; permission to run the sandbox and house-runner jobs with overrides; act as `sa-tasks` |
+| `sa-hq-run` | Firestore user; Firebase Auth viewer (revocation check); Run viewer (polls job operations); Cloud Tasks enqueuer; Vertex AI user; DLP user; KMS encrypt/decrypt on `vault`; Storage object admin on jobs and sandbox buckets; permission to run the sandbox and house-runner jobs with overrides; act as `sa-tasks` |
 | `sa-tasks` | Cloud Run invoker on `sideagent-hq` (OIDC for Cloud Tasks) |
 | `sa-sandbox` | `storage.objectViewer` on sandbox-in; `storage.objectUser` on sandbox-out (needed for the write mount). Nothing else. |
 | `sa-house-honest`, `sa-house-cheat` | Vertex AI user; secret accessor on its own key |
+| `sa-budget-guard` | Firestore user (sets `config/platform.paused`); Project Billing Manager (unlinks billing at 200%) |
+| `sa-budget-push` | Cloud Run invoker on `budget-guard` (OIDC for the Pub/Sub push) |
+| Compute Engine default | Artifact Registry writer on `sideagent`, log writer: Cloud Build runs as it |
 | `sa-deploy` | Used by GitHub Actions via Workload Identity Federation: Cloud Run admin, Artifact Registry writer, act as the runtime accounts, Firebase deploy |
 
 ## Configuration
@@ -269,8 +276,9 @@ HQ:
 |---|---|
 | `PORT` | HTTP port (default `8080`) |
 | `GCP_PROJECT`, `GCP_REGION` | Project and region (`sideagent-hq`, `us-west1`; D25) |
-| `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
-| `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
+| `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup: HQ's own URL is the task target and OIDC audience, and `/internal/steps/:step` accepts only tokens for it from `TASKS_SA_EMAIL` |
+| `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage. These and the other GCP variables are set by Terraform; each cloud mode fails at startup naming any that is missing |
+| `HOUSE_RUNNER_JOB`, `HOUSE_RUNNER_DOUBLE_AGENT_JOB` | Cloud Run Jobs for `HOUSE_RUNNERS=cloud-run-job` |
 | `SANDBOX_IMAGE` | Sandbox image for `SANDBOX_MODE=docker` (default `sideagent-sandbox-python:dev`) |
 | `SANDBOX_TIMEOUT_SECONDS` | Host-side cap on one `docker run` check (default 600); the container is killed and the step retried |
 | `KMS_KEY` | Vault key resource name |
@@ -279,7 +287,7 @@ HQ:
 | `PIPELINE_MODE`, `SANDBOX_MODE` | `inline` / `cloud-tasks`, `docker` / `cloud-run-job` |
 | `HOUSE_RUNNERS` | `off` (default) / `local` / `cloud-run-job` |
 | `HOUSE_RUNNER_DOUBLE_AGENT`, `HOUSE_RUNNER_DOUBLE_AGENT_API_KEY` | Dispatch the demo double agent instead of the honest runner, with its own runner key (printed by the seed script; one trap failure burns it) |
-| `HOUSE_RUNNER_API_KEY` | Runner key the house runner claims with; required when `HOUSE_RUNNERS=local` (printed by the seed script; Secret Manager in Phase 7) |
+| `HOUSE_RUNNER_API_KEY` | Runner key the house runner claims with; required when `HOUSE_RUNNERS=local` (printed by the seed script). With `cloud-run-job` the key is a Secret Manager secret on the job, seeded once by `deploy.sh` from `pnpm --filter @sideagent/hq seed:house` |
 | `HOUSE_RUNNER_MODEL_BACKEND`, `HOUSE_RUNNER_MODEL` | Passed to the house runner as `SIDEAGENT_MODEL_BACKEND` (default `vertex`, D26) and `SIDEAGENT_MODEL` |
 | `HOUSE_RUNNER_MAX` | Local house runners running at once (default 2); a job dispatched past the cap gets a "dispatch failed" event and is left to outside runners |
 | `LIMIT_POSTS_PER_HOUR`, `LIMIT_POSTS_PER_DAY`, `LIMIT_CHECKS_PER_JOB`, `LIMIT_MUTANTS` | Caps on paid work (D32): posts per owner per UTC hour (10), posts platform-wide per UTC day (40), submissions per job over all claims (6), mutants per job (12, at most 50). A hit returns `rate_limited` |
@@ -289,7 +297,7 @@ HQ:
 | `PLATFORM_MODEL_BACKEND` | `vertex` (default, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`, default `global`) or `gemini-api` (with `GEMINI_API_KEY`). Without credentials HQ still starts; screening steps throw and leave jobs in `screening` |
 | `SCREENING_FEE`, `TRAP_BURN_AFTER` | Credits held on post and kept once screening runs (1, D30); trap failures before a runner is burned (1, D29) |
 | `VAULT_LOCAL_KEY`, `VAULT_LOCAL_KEY_FILE` | Local vault key (base64 of 32 bytes), else read from or generated into the file (default `.data/vault.key`) |
-| `FIRESTORE_EMULATOR_HOST` | Firestore emulator address; required until Phase 7 (`pnpm --filter @sideagent/hq dev` defaults it to `127.0.0.1:8180`) |
+| `FIRESTORE_EMULATOR_HOST` | Firestore emulator address (`pnpm --filter @sideagent/hq dev` defaults it to `127.0.0.1:8180`). Unset means production Firestore, which HQ refuses on a `demo-*` project |
 | `FIREBASE_AUTH_EMULATOR_HOST` | Auth emulator address for verifying mission control's sign-in tokens (`dev` defaults it to `127.0.0.1:9099`); without it the owner routes refuse every call |
 | `CONTROL_ORIGIN` | Mission control's origin, allowed by CORS on `/v1/owner` (default `http://localhost:3000`) |
 | `CLAIM_TTL_SECONDS`, `CLAIM_ATTEMPTS` | Claim length (default 1800) and submissions per claim (default 3) |
@@ -305,6 +313,7 @@ Field CLI:
 | `SIDEAGENT_SANDBOX_IMAGE` | Image for `run_public_tests` (default `sideagent-sandbox-python:dev`) |
 | `SIDEAGENT_SIMULATE_CHEAT` | Demo double agent |
 | `SIDEAGENT_MAX_TOKENS` | Token cap per job for the built-in loop (default 600,000; house runners get `HOUSE_RUNNER_MAX_TOKENS`) |
+| `SIDEAGENT_TEST_RUNNER`, `SIDEAGENT_RUN_CHECKS` | `docker` (default, laptops) or `process` (house runners: `run_checks.py run` in-process on a copy of the workspace, with an environment of only `PATH`, `HOME` and `LANG`; the container is the sandbox), and the script's path for `process` (default `/opt/sideagent/run_checks.py`) |
 | `OLLAMA_HOST` | Ollama URL for the `ollama` backend (default `http://127.0.0.1:11434`) |
 | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Vertex AI project and location (default `global`) for the `vertex` backend |
 | `GEMINI_API_KEY` | Only for the `gemini-api` backend |
@@ -370,7 +379,7 @@ Rules:
 - Before recording, warm up by running one demo job instead of raising minimum instances.
 - Spend caps in three layers (D32): HQ limits (posts per owner per hour, posts per day, checks per job, mutants per job, house-runner tokens) and the `config/platform.paused` kill switch; GCP settings (HQ max 2 instances, jobs with no retries and a task timeout, Cloud Tasks with 5 attempts); a $10 budget whose `budget-guard` function pauses the platform at 100% and turns off billing at 200%.
 - Worst case per job with the caps is about $0.15 (house runner at its token cap on all 3 attempts, trap writer at its output cap, 6 checks), so about $6/day at 40 jobs. Observed: about $0.01–0.02 per job.
-- Budget set by `setup-gcp.sh`. `teardown.sh` removes everything billable after judging; Firestore and the project stay.
+- Budget set by Terraform. `terraform destroy` removes everything billable after judging; the Firestore database is abandoned, not deleted, and the KMS key ring stays (key rings can't be deleted; destroyed key versions cost nothing).
 - Check whether the hackathon provides GCP credits before Phase 7.
 
 ## Verified facts
@@ -428,8 +437,10 @@ From Phase 5 runs against Gemini on Vertex AI (`sideagent-hq`, `global`), 2026-1
 | Gemini 2.5 Flash-Lite is weaker than larger models on harder demo jobs | Pick demo jobs it solves reliably; `SIDEAGENT_MODEL=gemini-2.5-flash` is a config change. Managed Gemma was dropped for its 429s (D26) |
 | Gemma fails demo tasks | Pick demo tasks Gemma solves reliably; test them on day 2 |
 | Sandbox and house-runner cold starts slow the demo | Jobs are async anyway; pre-warm by running one job before recording |
-| Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; `setup-gcp.sh` and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
+| Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; the Terraform and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
 | Mutation testing too slow | Cap mutants; run strength scoring only in `review`, not on every check |
+| Concurrent sandbox checks share the bucket mounts, so a result could read another check's hidden tests (Phase 7) | Open: one-at-a-time sandbox queue or signed URLs per execution ("Test sandbox") |
+| House-runner tests run in the runner's container, so test code could read the house runner's key from `/proc` | Accepted for the prototype (D20): one job per container, a key for a house owner, an account that can only call Vertex AI |
 | Sandbox can reach Google APIs and the metadata server (confirmed on day 1) | Sandbox service account has only its two bucket roles; VPC Service Controls later |
 | A result attacks the checker from inside the test process | Scoring defences in `run_checks.py`; trap checks and stakes; separate sandbox user per category later |
 | Scope creep | Must-have list above is the contract; everything else waits for day 4 |
