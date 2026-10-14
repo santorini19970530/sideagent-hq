@@ -1,9 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Clients never write; read rules for mission control arrive in Phase 4.
-    match /{document=**} {
-      allow read, write: if false;
+    // Mission control reads; every write goes through HQ (firebase-admin bypasses these rules).
+    // Unmatched paths, including jobs/*/private, jobs/*/submissions, ledger and vault, are denied.
+    // Owner IDs are Firebase Auth UIDs (D28).
+
+    function isOwner(ownerId) {
+      return request.auth != null && request.auth.uid == ownerId;
+    }
+
+    function canSeeJob(job) {
+      return isOwner(job.posterOwnerId) || (job.claim != null && isOwner(job.claim.runnerOwnerId));
+    }
+
+    function jobData(jobId) {
+      return get(/databases/$(database)/documents/jobs/$(jobId)).data;
+    }
+
+    match /owners/{ownerId} {
+      allow read: if isOwner(ownerId);
+    }
+
+    match /agents/{agentId} {
+      allow read: if isOwner(resource.data.ownerId);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if canSeeJob(resource.data);
+
+      match /events/{eventId} {
+        allow read: if canSeeJob(jobData(jobId));
+      }
+    }
+
+    // owner:<ownerId>, and escrow:<jobId> or stake:<jobId>:<agentId> for a job the owner can see.
+    match /balances/{account} {
+      allow get: if (account.split(':')[0] == 'owner' && isOwner(account.split(':')[1]))
+        || (account.split(':')[0] in ['escrow', 'stake'] && canSeeJob(jobData(account.split(':')[1])));
+    }
+
+    match /feed/{eventId} {
+      allow read: if true;
     }
   }
 }

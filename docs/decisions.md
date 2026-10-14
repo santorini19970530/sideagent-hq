@@ -202,3 +202,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** The Phase 4 demo needs a job to finish with no runner started by hand, and an ordinary runner key means the house runner goes through the same claim, stake and check path as anyone else. In Phase 7 the key moves to Secret Manager (D17).
 
 **Trade-off:** A laptop runner and the house runner race for every job, and a job that reopens after a failed claim is not dispatched again. A dispatch delay can come with Phase 5, when the demo races Gemma, the double agent and the house runner.
+
+## D28. An owner's ID is their Firebase Auth UID (2026-10-15)
+
+**Decision:** `owners/{ownerId}` uses the Firebase Auth UID of the person who signs in to mission control. HQ creates the owner on first sign-in. Owners created by the seed script (local dev and house runners) keep generated IDs and can't sign in.
+
+**Why:** Firestore rules can then check `request.auth.uid == ownerId` directly, with no lookup document, and one person maps to exactly one owner.
+
+**Trade-off:** One owner per Google account; team owners with several members are a roadmap item.

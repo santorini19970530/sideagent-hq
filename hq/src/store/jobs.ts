@@ -1,12 +1,4 @@
-import type {
-  CheckOutcome,
-  CodeFile,
-  JobState,
-  JobSummary,
-  JobType,
-  Runtime,
-  TestSummary,
-} from "@sideagent/protocol";
+import type { ClaimView, JobEventView, JobState, JobSummary, JobView } from "@sideagent/protocol";
 import {
   Timestamp,
   type DocumentReference,
@@ -17,46 +9,11 @@ import { HqError } from "../errors.ts";
 import { canTransition } from "../jobs/transitions.ts";
 import { accounts, transfer } from "../ledger/ledger.ts";
 
-export interface ClaimDoc {
-  runnerAgentId: string;
-  runnerOwnerId: string;
-  /** Credits held in `stake:<jobId>:<runnerAgentId>` while the claim lasts. */
-  stake: number;
-  claimedAt: Timestamp;
-  deadline: Timestamp;
-  attemptsLeft: number;
-}
-
-/** `jobs/{jobId}`. Read by mission control later, so no spec body, hidden tests or results. */
-export interface JobDoc {
-  posterAgentId: string;
-  posterOwnerId: string;
-  type: JobType;
-  runtime: Runtime | null;
-  title: string;
-  state: JobState;
+/** `jobs/{jobId}`: what mission control reads, plus fields only HQ uses. */
+export interface JobDoc extends JobView<Timestamp> {
   specRef: string;
-  publicTests: CodeFile[];
-  budget: number;
-  deadline: Timestamp;
-  claim: ClaimDoc | null;
-  passedSubmissionId: string | null;
-  /** When the `dispatch` step started a house runner for this job; absent if it never did. */
-  dispatchedAt?: Timestamp;
-  /** Counts only; the rejection reason stays on the submission. */
-  lastCheck: LastCheckDoc | null;
   idempotencyKey: string;
   requestHash: string;
-  /** Number of events written; the next event's sequence number. */
-  eventSeq: number;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
-export interface LastCheckDoc {
-  submissionId: string;
-  outcome: CheckOutcome;
-  summary: TestSummary | null;
 }
 
 /** States in which a runner holds a claim that can time out. */
@@ -97,14 +54,15 @@ export function appendEvent(
   at: Timestamp,
 ): void {
   const seq = job.eventSeq++;
-  tx.create(ref.collection("events").doc(String(seq).padStart(6, "0")), {
+  const event: JobEventView<Timestamp> = {
     type: "state",
     seq,
     from,
     to,
     detail,
     createdAt: at,
-  });
+  };
+  tx.create(ref.collection("events").doc(String(seq).padStart(6, "0")), event);
 }
 
 export interface JobUpdate {
@@ -179,7 +137,12 @@ export function expireClaimIfDue(
 }
 
 /** Empties the claim's stake account: `slashed` credits to fees, the rest to the runner's owner. */
-export function releaseStake(u: JobUpdate, claim: ClaimDoc, slashed: number, reason: string) {
+export function releaseStake(
+  u: JobUpdate,
+  claim: ClaimView<Timestamp>,
+  slashed: number,
+  reason: string,
+) {
   const entry = { from: accounts.stake(u.ref.id, claim.runnerAgentId), jobId: u.ref.id, reason };
   const db = u.ref.firestore;
   transfer(u.tx, db, { ...entry, to: accounts.fees, amount: slashed }, u.at);

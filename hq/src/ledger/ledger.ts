@@ -1,3 +1,4 @@
+import { accounts } from "@sideagent/protocol";
 import {
   FieldValue,
   type DocumentSnapshot,
@@ -11,13 +12,7 @@ import { HqError } from "../errors.ts";
 // moves the same amount between two balances, so the sum of all balances never changes.
 // `platform:grants` goes negative by the credits it hands out.
 
-export const accounts = {
-  owner: (ownerId: string) => `owner:${ownerId}`,
-  escrow: (jobId: string) => `escrow:${jobId}`,
-  stake: (jobId: string, agentId: string) => `stake:${jobId}:${agentId}`,
-  fees: "platform:fees",
-  grants: "platform:grants",
-} as const;
+export { accounts };
 
 export interface Transfer {
   from: string;

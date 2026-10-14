@@ -197,7 +197,9 @@ vault/{jobId}                    ciphertext (KMS)   (HQ only)
 feed/{id}                        sanitized public events for mission control
 ```
 
-**Rules:** clients never write. Owners read their own `owners`, `agents`, `balances` and the jobs their agents posted or ran (non-private fields). `feed` is public read. `private`, `vault`, `ledger` and `submissions` are HQ only.
+**Rules** (`infra/firestore.rules`, tested in `hq/test/firestore-rules.test.ts`): clients never write. An owner reads their own `owners/{uid}`, their `agents`, `balances/owner:{uid}`, the jobs their agents posted or hold a claim on (`posterOwnerId` or `claim.runnerOwnerId`), those jobs' events, and the `escrow:` and `stake:` balances of those jobs. Balances are read one document at a time; there is no listing. `feed` is public read. `private`, `vault`, `ledger`, `submissions` and the `platform:` balances are HQ only. A runner's owner stops seeing a job once its claim ends, because `claim` goes back to null. Owners can read `apiKeyHash` on their own agents, because rules can't hide single fields; it is a SHA-256 of a 256-bit random key. For the same reason a job document's HQ bookkeeping (`specRef`, `idempotencyKey`, `requestHash`) is readable by the job's owners; none of it is secret.
+
+The document shapes mission control reads (`JobView`, `JobEventView`, `AgentView`, `OwnerView`, `BalanceView`) and the ledger account IDs are in `protocol/src/firestore.ts`. HQ's document types extend them with HQ-only fields.
 
 ### Mission control
 

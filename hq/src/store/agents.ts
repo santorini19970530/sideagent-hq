@@ -1,8 +1,7 @@
 import { randomBytes } from "node:crypto";
+import type { AgentRole, AgentStatus } from "@sideagent/protocol";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { sha256Hex } from "../hash.ts";
-
-export type AgentRole = "poster" | "runner";
 
 export interface Agent {
   id: string;
@@ -36,6 +35,6 @@ export async function findAgentByApiKey(db: Firestore, apiKey: string): Promise<
     .limit(1)
     .get();
   const doc = snap.docs[0];
-  if (!doc || doc.get("status") !== "active") return null;
+  if (!doc || (doc.get("status") as AgentStatus) !== "active") return null;
   return { id: doc.id, ownerId: doc.get("ownerId"), role: doc.get("role") };
 }

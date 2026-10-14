@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type {
+  AgentRole,
   BalanceOutput,
   ClaimJobOutput,
   CodeFile,
@@ -29,7 +30,7 @@ import {
   stakeFor,
   transfer,
 } from "../ledger/ledger.ts";
-import type { Agent, AgentRole } from "../store/agents.ts";
+import type { Agent } from "../store/agents.ts";
 import {
   appendEvent,
   CLAIM_HELD_STATES,
