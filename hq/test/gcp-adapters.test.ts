@@ -87,6 +87,24 @@ describe("DLP redactor", () => {
       inspectConfig: { infoTypes: expect.arrayContaining([{ name: "PERSON_NAME" }]) },
     });
   });
+
+  it("also redacts what only the pattern redactor finds, like a bare account number", async () => {
+    // Seen live: DLP found the email but not "account 12345678".
+    const text = "Mail ops@example.com about account 12345678.";
+    const client: DlpClient = {
+      async inspectContent() {
+        return [
+          {
+            result: {
+              findings: [finding("EMAIL_ADDRESS", ...codepoints(text, "ops@example.com"))],
+            },
+          },
+        ];
+      },
+    };
+    const out = await redact(createDlpRedactor(client, "sideagent-hq"), [text]);
+    expect(out.texts).toEqual(["Mail [EMAIL_1] about account [ACCT_1]."]);
+  });
 });
 
 describe("KMS vault", () => {

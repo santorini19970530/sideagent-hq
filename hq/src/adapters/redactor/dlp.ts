@@ -1,4 +1,5 @@
 import type { protos } from "@google-cloud/dlp";
+import { findPatterns } from "./pattern.ts";
 import type { Finding, Redactor } from "./types.ts";
 
 /** The part of `DlpServiceClient` the redactor uses, so tests can pass a fake. */
@@ -68,6 +69,12 @@ export function mapDlpFindings(
     }
     mapped.push({ type, start: offsets[start]!, end: offsets[end]! });
   }
+  return withoutOverlaps(mapped);
+}
+
+/** Keeps one finding per span: the higher-priority type, then the longer finding. */
+function withoutOverlaps(findings: Finding[]): Finding[] {
+  const mapped = [...findings];
   mapped.sort(
     (a, b) =>
       PRIORITY.indexOf(a.type) - PRIORITY.indexOf(b.type) ||
@@ -81,7 +88,10 @@ export function mapDlpFindings(
   return kept.sort((a, b) => a.start - b.start);
 }
 
-/** `REDACTOR_BACKEND=dlp`: Sensitive Data Protection `inspectContent`, one call per text. */
+/**
+ * `REDACTOR_BACKEND=dlp`: Sensitive Data Protection `inspectContent`, one call per text, plus
+ * the pattern redactor's findings.
+ */
 export function createDlpRedactor(client: DlpClient, project: string): Redactor {
   const parent = `projects/${project}/locations/global`;
   const inspectConfig: protos.google.privacy.dlp.v2.IInspectConfig = {
@@ -104,7 +114,12 @@ export function createDlpRedactor(client: DlpClient, project: string): Redactor 
           if (res.result?.findingsTruncated) {
             throw new Error("DLP truncated its findings; the text is too large to redact");
           }
-          return mapDlpFindings(text, res.result?.findings ?? []);
+          // DLP's detectors miss what the pattern redactor catches, such as a bare number after
+          // "account"; both backends must catch at least what the local default does.
+          return withoutOverlaps([
+            ...mapDlpFindings(text, res.result?.findings ?? []),
+            ...findPatterns(text),
+          ]);
         }),
       ),
   };
