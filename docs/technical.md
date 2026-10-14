@@ -249,7 +249,7 @@ HQ:
 | Variable | Meaning |
 |---|---|
 | `PORT` | HTTP port (default `8080`) |
-| `GCP_PROJECT`, `GCP_REGION` | Project and region |
+| `GCP_PROJECT`, `GCP_REGION` | Project and region (`sideagent-hq`, `us-west1`; D25) |
 | `TASKS_QUEUE`, `TASKS_SA_EMAIL`, `HQ_URL` | Cloud Tasks setup |
 | `SANDBOX_JOB`, `SANDBOX_IN_BUCKET`, `SANDBOX_OUT_BUCKET`, `JOBS_BUCKET` | Sandbox and storage |
 | `SANDBOX_IMAGE` | Sandbox image for `SANDBOX_MODE=docker` (default `sideagent-sandbox-python:dev`) |
@@ -336,7 +336,9 @@ Rules:
 - Budget alert set by `setup-gcp.sh`. `teardown.sh` removes everything billable after judging; Firestore and the project stay.
 - Check whether the hackathon provides GCP credits before Phase 7.
 
-## Verified facts (checked 2026-10-13)
+## Verified facts
+
+From the docs, checked 2026-10-13:
 
 - **Managed Gemma on Vertex AI:** model ID `gemma-4-26b-a4b-it-maas` (Gemma 4 26B A4B IT). Launch stage **Experimental**. Available only at the `global` location; ML processing is multi-region `us`. Supports function calling and structured output; no thinking mode. Context 262,144 tokens, max output 128,000. Pay-as-you-go supported. Because it is Experimental, the Gemini API fallback backend must work before the demo.
 - **Cloud Storage mounts on Cloud Run Jobs:** supported, with a read-only option. The mount uses the job's service identity (`roles/storage.objectViewer` to read, `roles/storage.objectUser` to write). If the mount can't reach Cloud Storage, the job doesn't start; the mount phase has a 30-second timeout. Google recommends Direct VPC with `--vpc-egress=all-traffic` plus Private Google Access for this setup. No file locking; writes flush on close.
@@ -344,23 +346,24 @@ Rules:
 
 ## Day 1 checks
 
-These run as throwaway experiments in `infra/experiments/`, not app deploys, and leave nothing running.
+From day-1 experiments on project `sideagent-hq` (`us-central1`, before D25 chose `us-west1`), 2026-10-15. Scripts are in `infra/experiments/`; nothing was left running.
 
-- Gemma call at the `global` location works from our project, including function calling, through `@google/genai`.
-- Sandbox job: mount works with all-traffic egress + Private Google Access and no NAT, and `curl https://example.com` from inside the job fails.
-- Gemini structured output from Zod-derived JSON Schema, and whether logprobs are returned for the chosen triage model.
-- Gemini CLI connects to the `/mcp` endpoint with an API-key header.
+- **Gemma call works:** `gemma-4-26b-a4b-it-maas` at `global` through `@google/genai` returned a correct function call in about 1.2 s. The first call got `429 RESOURCE_EXHAUSTED` "The request queue is full" and the retry succeeded, so the `vertex` backend must retry 429s with backoff.
+- **Gemini structured output and logprobs:** `responseJsonSchema: z.toJSONSchema(schema)` returns JSON that parses with the same Zod schema on `gemini-2.5-flash-lite` and `gemini-2.5-flash` (Vertex, `global`), and both return `avgLogprobs` and per-token logprobs, so either can be `MODEL_TRIAGE`. `gemini-3-flash-preview` rejects `responseLogprobs` (400), and its thinking tokens count against `maxOutputTokens`: at 512 the JSON was cut off. Leave room for thinking or set a thinking budget when escalating to a Gemini 3 model.
+- **Sandbox network:** a Cloud Run Job on a /26 subnet with Direct VPC `all-traffic` egress, Private Google Access and no Cloud NAT mounted a bucket read-only (mount took about 2 s) and could not reach `https://example.com`. It **could** reach `storage.googleapis.com` (401 without a token) and the metadata server (200), so code in the sandbox can get a token for the job's service account. The sandbox service account must hold nothing beyond its two bucket roles. After the run, Cloud Run keeps a serverless IP on the subnet for a while, so the subnet can't be deleted straight away.
+- **Gemini CLI to `/mcp`:** Gemini CLI 0.64.0 with `httpUrl` and an `Authorization: Bearer <key>` header shows the local HQ as Connected in `gemini mcp list`, and as Disconnected with a wrong key.
+- **Gemini API fallback:** a project API key restricted to `generativelanguage.googleapis.com` authenticates, but calls return `402` "Your prepayment credits are depleted" until prepaid credits are added in AI Studio. `gemini-2.5-flash` is "no longer available to new users" on the Gemini API (it suggests `gemini-3.8-flash`), so the fallback needs a different model ID from Vertex.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| Managed Gemma is Experimental (global only) and may change or be rate-limited | Gemini API fallback backend tested before the demo |
+| Managed Gemma is Experimental (global only) and may change or be rate-limited (429 "queue is full" seen on day 1) | Retry 429s with backoff; Gemini API fallback backend tested before the demo (needs prepaid AI Studio credits) |
 | Gemma fails demo tasks | Pick demo tasks Gemma solves reliably; test them on day 2 |
 | Sandbox and house-runner cold starts slow the demo | Jobs are async anyway; pre-warm by running one job before recording |
 | Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; `setup-gcp.sh` and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
 | Mutation testing too slow | Cap mutants; run strength scoring only in `review`, not on every check |
-| Sandbox can reach Google APIs | Minimal sandbox IAM now; VPC Service Controls later |
+| Sandbox can reach Google APIs and the metadata server (confirmed on day 1) | Sandbox service account has only its two bucket roles; VPC Service Controls later |
 | A result attacks the checker from inside the test process | Scoring defences in `run_checks.py`; trap checks and stakes; separate sandbox user per category later |
 | Scope creep | Must-have list above is the contract; everything else waits for day 4 |
 

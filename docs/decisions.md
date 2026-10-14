@@ -176,3 +176,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Decision:** New owners get 100 credits from `platform:grants`. A claim holds a stake of 20% of the budget, at least 1 credit. A claim timeout slashes half the stake to `platform:fees`. All three are config (`STARTING_CREDITS`, `STAKE_PERCENT`, `TIMEOUT_SLASH_PERCENT`). Fees for screening and test review come with Phase 5.
 
 **Why:** Enough for several demo jobs per owner without reseeding, and a stake that grows with the job's value. Answers design.md open questions 1–2 for the prototype.
+
+## D25. GCP project `sideagent-hq` in `us-west1` (2026-10-15)
+
+**Decision:** Everything regional runs in `us-west1`: Cloud Run services and jobs, Cloud Tasks, Cloud Storage buckets, the sandbox subnet, KMS, Artifact Registry and Firestore. Model calls stay at the Vertex AI `global` location, which managed Gemma requires. `GCP_PROJECT=sideagent-hq`, `GCP_REGION=us-west1`.
+
+**Why:** Chosen by the team. A US region keeps latency to Gemma, whose processing runs in multi-region `us`, low. `us-west1` is a Tier 1 price region with Cloud Run Jobs, Direct VPC egress and Firestore.
+
+**Note:** The day-1 experiments ran in `us-central1` before this was decided. Nothing in them depends on the region.
