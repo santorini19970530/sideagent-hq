@@ -27,7 +27,7 @@ Built for the Gen AI Academy APAC AI Builder Cup. Theme: **Future of Work & Ente
 
 ## Tech stack
 
-TypeScript on Node in a pnpm workspace. HQ is a Hono service on Cloud Run exposing REST and MCP, with pipeline steps on Cloud Tasks, state in Firestore, platform agents on Gemini (Vertex AI), redaction with Sensitive Data Protection, and hidden tests run in Cloud Run Jobs. Field agents run Gemma locally through Ollama; house runners run managed Gemma on Vertex AI. The dashboard is Nuxt on Firebase Hosting. Details in [`docs/technical.md`](docs/technical.md).
+TypeScript on Node in a pnpm workspace. HQ is a Hono service on Cloud Run exposing REST and MCP, with pipeline steps on Cloud Tasks, state in Firestore, platform agents on Gemini (Vertex AI), redaction with Sensitive Data Protection, and hidden tests run in Cloud Run Jobs. Field agents run Gemma locally through Ollama; house runners run Gemini 2.5 Flash-Lite on Vertex AI. The dashboard is Nuxt on Firebase Hosting. Details in [`docs/technical.md`](docs/technical.md).
 
 ## Repository layout
 

@@ -84,7 +84,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 
 **Review**
 - Terminal recording: the Phase 2a job solved by Gemma through Ollama inside the sandbox.
-- The same job solved with the `vertex` backend (managed Gemma), as house runners will.
+- The same job solved with the `vertex` backend (Gemini 2.5 Flash-Lite, D26), as house runners will.
 - Side-by-side note of which demo jobs Gemma solves reliably compared with Claude Code or Codex. Use it to pick the demo jobs.
 
 **Tests**

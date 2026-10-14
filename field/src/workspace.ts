@@ -60,14 +60,14 @@ export async function createWorkspace(job: RunnerJobView): Promise<Workspace> {
   return { dir, collect, dispose: () => rm(dir, { recursive: true, force: true }) };
 }
 
-function resolveInside(dir: string, path: string): string {
+export function resolveInside(dir: string, path: string): string {
   const resolved = resolve(dir, path);
   if (!resolved.startsWith(dir + sep)) throw new Error(`Path escapes the workspace: ${path}`);
   return resolved;
 }
 
 /** Regular files only: dotfiles, tool caches and symlinks are skipped. */
-async function listFiles(dir: string): Promise<string[]> {
+export async function listFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".")) continue;
@@ -78,6 +78,6 @@ async function listFiles(dir: string): Promise<string[]> {
   return out.sort();
 }
 
-function toPosix(path: string): string {
+export function toPosix(path: string): string {
   return path.split(sep).join("/");
 }

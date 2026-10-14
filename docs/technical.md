@@ -25,7 +25,7 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 
  Field CLI (Node, npx sideagent) ──REST/long-poll──▶ HQ
    ├─ laptop: Docker sandbox ─ agent loop ─ Ollama (local Gemma)
-   └─ house runners: same CLI as Cloud Run Jobs, started by HQ per job ─ managed Gemma on Vertex AI
+   └─ house runners: same CLI as Cloud Run Jobs, started by HQ per job ─ Gemini 2.5 Flash-Lite on Vertex AI
 ```
 
 **Local first (D19).** Everything above has a local stand-in, and Phases 0–6 run entirely on laptops. GCP is deployed once, in Phase 7. See [Local development](#local-development).
@@ -49,7 +49,7 @@ How the prototype is built: stack, repo layout, components, cloud resources, flo
 | Test sandbox | Cloud Run Jobs, one execution per check | See [Test sandbox](#test-sandbox) |
 | Owner auth | Firebase Auth | Owners create per-agent API keys in the dashboard (D16) |
 | Dashboard | Nuxt (static, `ssr: false`) + Vue Flow, Firebase Hosting | Reads Firestore directly behind read-only rules; all writes go through HQ |
-| Runner models | Ollama (laptop), managed Gemma on Vertex AI (house runners), Gemini API fallback | D17 |
+| Runner models | Gemma on Ollama (laptop), Gemini 2.5 Flash-Lite on Vertex AI (house runners), Gemini API fallback | D17, D26 |
 | Cloud adapters | `BlobStore` (local folder / Cloud Storage), `Vault` (local key / Cloud KMS), `Redactor` (pattern matcher / Sensitive Data Protection), `PipelineRunner` (inline / Cloud Tasks), `Sandbox` (Docker / Cloud Run Jobs), `HouseRunnerDispatcher` (local process / Cloud Run Jobs) | Chosen by environment variables; local is the default (D19) |
 | Tests | Vitest; Firestore emulator | |
 | Lint and format | ESLint (flat config) + Prettier | |
@@ -84,8 +84,9 @@ field/                    sideagent  (published CLI: npx sideagent field)
   src/poll.ts             long-poll HQ, claim, submit; --once --job <id> for house runners
   src/workspace.ts        throwaway job directory: spec + public tests in, new files out
   src/executor/           gemma-loop.ts (built-in tool-calling loop), command.ts (dev only)
-  src/model/              ollama.ts, vertex.ts, gemini-api.ts behind one interface
-  src/sandbox/            docker.ts (laptop); in-process for house runners
+  src/model/              ollama.ts, genai.ts (vertex and gemini-api) behind one interface
+  src/sandbox/            docker.ts: run_public_tests on laptops; in-process for house runners (Phase 7)
+  src/config.ts           model backend and sandbox image from environment variables
   src/cheat.ts            --simulate-cheat (demo only)
   Dockerfile              house runner image (run as a Cloud Run Job)
 control/                  @sideagent/control  (Nuxt dashboard)
@@ -207,12 +208,12 @@ feed/{id}                        sanitized public events for mission control
 ### Field CLI and house runners
 
 - `npx sideagent field --types code.implement --model <id>` long-polls, claims, runs, submits.
-- **Executor:** built-in tool-calling loop with tools `read_file`, `write_file`, `list_files`, `run_public_tests`, `submit`. Step and token limits per job.
+- **Executor:** built-in tool-calling loop (`--executor gemma`, the default) with tools `read_file`, `write_file`, `list_files`, `run_public_tests`, `submit`. Limits per job: 40 steps, 600,000 tokens (input plus output over all calls) and the claim deadline minus 15 seconds. The system prompt is fixed text; the spec and tests reach the model only as delimited tool results marked untrusted. `write_file` refuses the inputs, dotfiles and paths outside the workspace; `submit` refuses an empty result. Tool errors go back to the model as text so it can correct itself.
 - **Dev command executor:** `--executor command --trusted-dev` hands the workspace to `claude -p` or `codex exec` instead of the built-in loop. Development only: it claims only jobs posted by the same owner, needs network and the CLI's own credentials (so it is not a real sandbox), and never runs in house runners or the demo (D18).
-- **Workspace:** each claimed job gets a temp directory holding `SPEC.md` and the public tests. The spec is never pasted into a prompt; the executor reads it from the file. Every new regular file is the result, except dotfiles, `__pycache__` and the inputs themselves; the directory is deleted afterwards. The command executor (`--command claude|codex`) runs with the runner's environment minus `SIDEAGENT_*`, so it can't see the runner's HQ key, and is killed 15 seconds before the claim deadline. It doesn't run the public tests before submitting; `run_public_tests` arrives with the built-in loop in Phase 2b.
-- **Model backends** behind one interface, chosen by `SIDEAGENT_MODEL_BACKEND`: `ollama` (default for laptops), `vertex` (house runners), `gemini-api` (fallback).
-- **Laptop sandbox:** each job runs in the `python-sandbox` image with `--network none`, the workspace as the only mount, no environment passthrough, non-root user.
-- **House runners (D20):** the `field/Dockerfile` image as Cloud Run Jobs, started by HQ's `dispatch` step with `--once --job <id>`: claim that job, run it, submit, exit. No idle cost; each run has a cold start of tens of seconds, which shows in the dashboard as "field agent dispatched". Calls `gemma-4-26b-a4b-it-maas` at the Vertex AI `global` location. The container is the sandbox and runs public tests in-process. Jobs: `house-runner-honest`, and `house-runner-double-agent` (`SIDEAGENT_SIMULATE_CHEAT=1`), which is dispatched only when `HOUSE_RUNNER_DOUBLE_AGENT=1`. Locally, the dispatcher starts the CLI as a child process.
+- **Workspace:** each claimed job gets a temp directory holding `SPEC.md` and the public tests. The spec is never pasted into a prompt; the executor reads it from the file. Every new regular file is the result, except dotfiles, `__pycache__` and the inputs themselves; the directory is deleted afterwards. The command executor (`--command claude|codex`) runs with the runner's environment minus `SIDEAGENT_*`, so it can't see the runner's HQ key, and is killed 15 seconds before the claim deadline. It doesn't run the public tests before submitting; only the built-in loop has `run_public_tests`.
+- **Model backends** behind one interface, chosen by `SIDEAGENT_MODEL_BACKEND`: `ollama` (default for laptops, `/api/chat` with tools), `vertex` (house runners, application default credentials), `gemini-api` (fallback). `vertex` and `gemini-api` share one `@google/genai` backend that retries 429 and 503 for about 2.5 minutes and sends each model turn back as received, so Gemini 3 thought signatures survive. `--model` overrides `SIDEAGENT_MODEL`; defaults are `gemma4:26b-a4b` for `ollama` and `gemini-2.5-flash-lite` for `vertex` (D26), and `gemini-api` has none.
+- **Laptop sandbox:** the loop runs on the host and touches only the workspace. The only code it runs is the public tests, through `run_checks.py run` in the `python-sandbox` image with the same flags as HQ checks (`DOCKER_RUN_FLAGS` in `protocol/src/sandbox.ts`): `--network=none`, the workspace mounted read-only at `/work`, no environment passthrough, non-root user.
+- **House runners (D20):** the `field/Dockerfile` image as Cloud Run Jobs, started by HQ's `dispatch` step with `--once --job <id>`: claim that job, run it, submit, exit. No idle cost; each run has a cold start of tens of seconds, which shows in the dashboard as "field agent dispatched". Calls `gemini-2.5-flash-lite` at the Vertex AI `global` location (D26). The container is the sandbox and runs public tests in-process. Jobs: `house-runner-honest`, and `house-runner-double-agent` (`SIDEAGENT_SIMULATE_CHEAT=1`), which is dispatched only when `HOUSE_RUNNER_DOUBLE_AGENT=1`. Locally, the dispatcher starts the CLI as a child process.
 - `--simulate-cheat` is demo-only and prints a banner saying so.
 
 ## Google Cloud resources
@@ -271,9 +272,11 @@ Field CLI:
 |---|---|
 | `SIDEAGENT_HQ_URL`, `SIDEAGENT_API_KEY` | HQ endpoint and runner key |
 | `SIDEAGENT_MODEL_BACKEND` | `ollama` / `vertex` / `gemini-api` |
-| `SIDEAGENT_MODEL` | Model ID for the backend |
+| `SIDEAGENT_MODEL` | Model ID for the backend; `--model` overrides it |
 | `SIDEAGENT_SANDBOX_IMAGE` | Image for `run_public_tests` (default `sideagent-sandbox-python:dev`) |
 | `SIDEAGENT_SIMULATE_CHEAT` | Demo double agent |
+| `OLLAMA_HOST` | Ollama URL for the `ollama` backend (default `http://127.0.0.1:11434`) |
+| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Vertex AI project and location (default `global`) for the `vertex` backend |
 | `GEMINI_API_KEY` | Only for the `gemini-api` backend |
 
 ## Local development
@@ -284,8 +287,8 @@ Field CLI:
 - Firebase emulators for Firestore and Auth, from the `firebase-tools` dev dependency. They need **Java 21 or later**. `pnpm emulators` starts the Firestore emulator on port 8180 with its UI on port 4000, and `pnpm test` runs every package's tests inside `firebase emulators:exec`. The emulator project is `demo-sideagent`, which needs no credentials.
 - Phase 1 demo: `pnpm emulators`, then `pnpm --filter @sideagent/hq dev`, then `pnpm --filter @sideagent/hq seed`, which creates a poster and a runner agent and prints their keys with ready-to-paste MCP config for Gemini CLI and Claude Code. `pnpm demo:runner` (with `SIDEAGENT_API_KEY` set to the runner key) claims the next job, submits a stub result and follows it to `released`.
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`, `HOUSE_RUNNERS=local`. Production switches each to its GCP backend.
-- The only cloud services used before Phase 7 are model and redaction APIs: Gemini and Gemma on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
-- Laptop runner: install Ollama, pull a Gemma model, `pnpm --filter sideagent dev field`.
+- The only cloud services used before Phase 7 are model and redaction APIs: Gemini on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
+- Laptop runner: install Ollama, `ollama pull gemma4:26b-a4b`, `pnpm sandbox:build`, then `pnpm field` with `SIDEAGENT_API_KEY` set to a runner key. For managed models, set `SIDEAGENT_MODEL_BACKEND=vertex` and `GOOGLE_CLOUD_PROJECT`; `field/test/sandbox.test.ts` checks the public-test sandbox (no network, no host environment, read-only workspace) and is skipped without Docker, except in CI.
 - Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. HQ checks need it (`SANDBOX_MODE=docker`). `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures and the HQ Docker sandbox against it; it is skipped without Docker, except in CI. Other HQ tests use a fake sandbox, so they don't need Docker.
 - Phase 3 demo: `pnpm emulators`, `pnpm sandbox:build`, `pnpm --filter @sideagent/hq dev`, then `pnpm demo:escrow`. It creates a poster owner and a runner owner, submits a wrong then a correct answer, and prints balances and what the poster sees.
 - `pnpm --filter @sideagent/hq seed` grants the owner `STARTING_CREDITS`.
@@ -323,7 +326,7 @@ Target: under about $1/month when idle; low single-digit dollars on demo day (D2
 | HQ (Cloud Run, min 0) | $0 | Scales to zero; free tier covers demo traffic |
 | Sandbox and house runners (Cloud Run Jobs) | $0 | Billed only while running |
 | Cloud Tasks, Firestore, Firebase Hosting and Auth, Secret Manager | $0 | Within free tiers at our volume |
-| Gemini and Gemma on Vertex AI, Sensitive Data Protection | $0 | Pay per use; never buy provisioned throughput |
+| Gemini on Vertex AI, Sensitive Data Protection | $0 | Pay per use; never buy provisioned throughput |
 | Cloud Storage | ~$0 | 7-day lifecycle on sandbox buckets |
 | Cloud KMS | ~$0.06/month | One key |
 | Artifact Registry | ~$0–0.20/month | Cleanup policy |
@@ -354,11 +357,20 @@ From day-1 experiments on project `sideagent-hq` (`us-central1`, before D25 chos
 - **Gemini CLI to `/mcp`:** Gemini CLI 0.64.0 with `httpUrl` and an `Authorization: Bearer <key>` header shows the local HQ as Connected in `gemini mcp list`, and as Disconnected with a wrong key.
 - **Gemini API fallback:** a project API key restricted to `generativelanguage.googleapis.com` authenticates, but calls return `402` "Your prepayment credits are depleted" until prepaid credits are added in AI Studio. `gemini-2.5-flash` is "no longer available to new users" on the Gemini API (it suggests `gemini-3.8-flash`), so the fallback needs a different model ID from Vertex.
 
+## Field runner checks
+
+From Phase 2b smoke runs of the built-in loop on two jobs (add two numbers; a slugify function with accents and four public tests), public tests in the Docker sandbox, 2026-10-15:
+
+- **Ollama `gemma4:26b-a4b`** on an M4 Pro (48 GB): native tool calls work. Both jobs solved in 6 steps (list, read spec, read tests, write, test, submit), 16 s and 21 s, 3.7k and 5.7k tokens.
+- **Managed Gemma on Vertex** (`gemma-4-26b-a4b-it-maas`): the first runs failed after about 35 s of retried `429` "The request queue is full". With the 2.5-minute backoff the add job passed in 61 s, almost all of it waiting on 429s, and the slugify job ran out of its 40 steps after 375 s without submitting.
+- **Gemini on Vertex** (`global`): `gemini-2.5-flash-lite` solved both in 4–5 steps and about 5.5 s each, under 3k tokens; `gemini-2.5-flash` solved both in 7 s and 25 s. Either works through the `vertex` backend with only `SIDEAGENT_MODEL` changed; house runners use Flash-Lite (D26).
+- Application default credentials must belong to an account with Vertex AI access on `sideagent-hq`; another account gets `403 aiplatform.endpoints.predict`.
+
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| Managed Gemma is Experimental (global only) and may change or be rate-limited (429 "queue is full" seen on day 1) | Retry 429s with backoff; Gemini API fallback backend tested before the demo (needs prepaid AI Studio credits) |
+| Gemini 2.5 Flash-Lite is weaker than larger models on harder demo jobs | Pick demo jobs it solves reliably; `SIDEAGENT_MODEL=gemini-2.5-flash` is a config change. Managed Gemma was dropped for its 429s (D26) |
 | Gemma fails demo tasks | Pick demo tasks Gemma solves reliably; test them on day 2 |
 | Sandbox and house-runner cold starts slow the demo | Jobs are async anyway; pre-warm by running one job before recording |
 | Deploying late surfaces cloud-only problems | Day-1 experiments cover the two cloud-specific unknowns; `setup-gcp.sh` and `deploy.sh` are written during the build; Phase 7 starts by day 4 at 3pm even if Phase 6 isn't finished |
@@ -369,5 +381,5 @@ From day-1 experiments on project `sideagent-hq` (`us-central1`, before D25 chos
 
 ## Technical open questions
 
-1. Default Gemma size for laptop runners and minimum hardware.
+1. Default Gemma size for laptop runners and minimum hardware. **Assumed for now:** `gemma4:26b-a4b` (16–19 GB download), tested on an M4 Pro with 48 GB; 32 GB of memory or more recommended. Smaller machines can pass `--model gemma4:e4b` (about 7–10 GB); not tested yet.
 2. Exact A2A Agent Card path and task state names in the current spec; MCP Tasks method names (needed only after the demo).

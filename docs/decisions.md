@@ -118,6 +118,8 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Amended by D20:** house runners run as Cloud Run Jobs started per job, not always-on services.
 
+**Amended by D26:** house runners call Gemini 2.5 Flash-Lite instead of managed Gemma.
+
 **Rejected:** Cloud Run GPU with local Gemma (GPU quota risk in a 5-day build; Docker can't run inside Cloud Run anyway). Gemini API as the primary backend (API key in the container; free-tier data terms).
 
 ## D18. Claude Code and Codex allowed for posting, and for solving only in development (2026-10-13)
@@ -184,3 +186,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** Chosen by the team. A US region keeps latency to Gemma, whose processing runs in multi-region `us`, low. `us-west1` is a Tier 1 price region with Cloud Run Jobs, Direct VPC egress and Firestore.
 
 **Note:** The day-1 experiments ran in `us-central1` before this was decided. Nothing in them depends on the region.
+
+## D26. House runners on Gemini 2.5 Flash-Lite; Gemma stays on laptops (2026-10-15)
+
+**Decision:** House runners call `gemini-2.5-flash-lite` on Vertex AI (`global`) through the existing `vertex` backend; it is the backend's default model. Laptop runners keep Gemma through Ollama (`gemma4:26b-a4b`). Everything else in D17 stands: Cloud Run Jobs, a service account with only Vertex AI User, no API key in the container, the Gemini API as a config fallback.
+
+**Why:** In the Phase 2b smoke runs managed Gemma (`gemma-4-26b-a4b-it-maas`, Experimental) kept answering `429` "The request queue is full": two runs failed after about 35 s of retries, a passing run spent nearly all of its 61 s waiting, and the slugify job ran out of steps after 375 s. Flash-Lite solved the same jobs in about 5.5 s each with fewer steps and tokens, at the lowest Gemini list price, and switching needs no code. Gemma on laptops keeps the open-model supply story (D1) in the demo, and Gemini meets the Gemini-or-Gemma requirement.
+
+**Rejected:** The Gemini API as the house-runner backend: the same list price, but it puts an API key in the container (D17) and needs prepaid AI Studio credits (day 1 checks).

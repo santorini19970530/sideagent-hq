@@ -3,9 +3,9 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { ApiError, TestSummary } from "@sideagent/protocol";
+import { ApiError, DOCKER_RUN_FLAGS, TestSummary } from "@sideagent/protocol";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createDockerSandbox, DOCKER_RUN_FLAGS } from "../src/sandbox/docker.ts";
+import { createDockerSandbox } from "../src/sandbox/docker.ts";
 
 const IMAGE = "sideagent-sandbox-python:dev";
 const CONTEXT = resolve(import.meta.dirname, "../../images/python-sandbox");

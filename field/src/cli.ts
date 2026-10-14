@@ -2,9 +2,13 @@
 import { parseArgs } from "node:util";
 import { JobType } from "@sideagent/protocol";
 import pkg from "../package.json" with { type: "json" };
+import { Config, createModelBackend } from "./config.ts";
 import { createCommandExecutor, TOOLS, type Tool } from "./executor/command.ts";
+import { createGemmaLoopExecutor } from "./executor/gemma-loop.ts";
+import type { Executor } from "./executor/types.ts";
 import { createHqClient } from "./hq-client.ts";
 import { runJob, runLoop } from "./poll.ts";
+import { createDockerTestRunner } from "./sandbox/docker.ts";
 
 const USAGE = `Usage: sideagent <command>
 
@@ -12,7 +16,9 @@ Commands:
   field     Run as a runner: claim jobs from HQ and solve them
 
 Field options:
-  --executor command   Executor to run jobs with (only "command" until Phase 2b)
+  --executor <name>    gemma (default): built-in tool-calling loop, public tests in Docker
+                       command: dev only, hands the job to claude or codex
+  --model <id>         Model for the gemma executor (default depends on the backend)
   --trusted-dev        Required by the command executor: no sandbox, own owner's jobs only
   --command <tool>     CLI the command executor runs: ${Object.keys(TOOLS).join(" or ")} (default claude)
   --types <a,b>        Only take jobs of these types, e.g. code.implement
@@ -21,6 +27,12 @@ Field options:
 Environment:
   SIDEAGENT_HQ_URL     HQ base URL (default http://localhost:8080)
   SIDEAGENT_API_KEY    Runner API key
+  SIDEAGENT_MODEL_BACKEND  ollama (default), vertex or gemini-api
+  SIDEAGENT_MODEL      Model ID; ollama defaults to gemma4:26b-a4b, vertex to gemini-2.5-flash-lite
+  OLLAMA_HOST          Ollama URL (default http://127.0.0.1:11434)
+  GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION  Vertex AI project and location (default global)
+  GEMINI_API_KEY       Key for the gemini-api backend
+  SIDEAGENT_SANDBOX_IMAGE  Image for public tests (default sideagent-sandbox-python:dev)
 
 Options:
   --version Print the version
@@ -39,7 +51,8 @@ async function field(argv: string[]) {
   const { values } = parseArgs({
     args: argv,
     options: {
-      executor: { type: "string" },
+      executor: { type: "string", default: "gemma" },
+      model: { type: "string" },
       "trusted-dev": { type: "boolean", default: false },
       command: { type: "string", default: "claude" },
       types: { type: "string" },
@@ -48,15 +61,29 @@ async function field(argv: string[]) {
     },
   });
 
-  if (values.executor !== "command") {
-    fail("Pass --executor command (the Gemma executor arrives in Phase 2b)");
-  }
-  const tool = values.command;
-  if (!isTool(tool)) fail(`Unknown --command ${tool}; use ${Object.keys(TOOLS).join(" or ")}`);
-  if (!values["trusted-dev"]) {
-    fail(
-      "The command executor runs without a sandbox and is for development only. Pass --trusted-dev.",
-    );
+  let executor: Executor;
+  if (values.executor === "command") {
+    const tool = values.command;
+    if (!isTool(tool)) fail(`Unknown --command ${tool}; use ${Object.keys(TOOLS).join(" or ")}`);
+    if (!values["trusted-dev"]) {
+      fail(
+        "The command executor runs without a sandbox and is for development only. Pass --trusted-dev.",
+      );
+    }
+    executor = createCommandExecutor({ argv: TOOLS[tool], trustedDev: true });
+  } else if (values.executor === "gemma") {
+    const parsed = Config.safeParse(process.env);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      fail(`Invalid ${issue?.path.join(".")}: ${issue?.message}`);
+    }
+    const config = parsed.data;
+    executor = createGemmaLoopExecutor({
+      model: createModelBackend(config, values.model),
+      tests: createDockerTestRunner({ image: config.SIDEAGENT_SANDBOX_IMAGE }),
+    });
+  } else {
+    fail(`Unknown --executor ${values.executor}; use gemma or command`);
   }
   const types = values.types?.split(",").map((t) => {
     const parsed = JobType.safeParse(t.trim());
@@ -68,7 +95,7 @@ async function field(argv: string[]) {
 
   const deps = {
     hq: createHqClient({ url: process.env.SIDEAGENT_HQ_URL ?? "http://localhost:8080", apiKey }),
-    executor: createCommandExecutor({ argv: TOOLS[tool], trustedDev: true }),
+    executor,
   };
 
   const controller = new AbortController();

@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sideagent/protocol": "workspace:*"
+    "@google/genai": "^2.29.1",
+    "@sideagent/protocol": "workspace:*",
+    "zod": "^4.6.6"
   }
 }

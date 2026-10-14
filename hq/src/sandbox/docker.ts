@@ -3,24 +3,9 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DOCKER_RUN_FLAGS } from "@sideagent/protocol";
 import { readCheckOutcome, writeCheckBundle } from "../runtimes/python.ts";
 import type { Sandbox } from "./types.ts";
-
-/** Isolation flags for the sandbox image (technical.md, "Test sandbox"). No `-e`: no host env. */
-export const DOCKER_RUN_FLAGS = [
-  "--rm",
-  "--pull=never",
-  "--network=none",
-  "--read-only",
-  "--tmpfs=/tmp:size=64m",
-  "--cap-drop=ALL",
-  "--security-opt=no-new-privileges",
-  "--user=10001",
-  "--pids-limit=128",
-  "--memory=512m",
-  "--cpus=1",
-  "--init",
-] as const;
 
 const STDERR_TAIL = 2000;
 
