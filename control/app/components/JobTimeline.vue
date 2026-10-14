@@ -13,6 +13,11 @@ const events = useLiveQuery<JobEventView<Timestamp>>(() =>
 const isPoster = computed(() => props.job.posterOwnerId === owner.value?.owner_id);
 const check = computed(() => props.job.lastCheck?.summary ?? null);
 const stakeHeld = computed(() => props.job.claim && STAKE_HELD_STATES.includes(props.job.state));
+const redacted = computed(() =>
+  Object.entries(props.job.redactions ?? {})
+    .map(([type, n]) => `${n} ${type.toLowerCase()}`)
+    .join(", "),
+);
 </script>
 
 <template>
@@ -44,7 +49,23 @@ const stakeHeld = computed(() => props.job.claim && STAKE_HELD_STATES.includes(p
         <dt>Last debrief</dt>
         <dd class="mono">{{ check.passed }}/{{ check.total }} tests</dd>
       </div>
+      <div v-if="job.screening">
+        <dt>Screening</dt>
+        <dd class="mono">
+          {{ job.screening.verdict === "allow" ? "Cleared" : "Blocked" }}
+          {{ job.screening.escalated ? "(escalated)" : "" }}
+        </dd>
+      </div>
+      <div v-if="redacted">
+        <dt>Eyes only</dt>
+        <dd class="mono">{{ redacted }}</dd>
+      </div>
     </dl>
+
+    <div v-if="job.rejection && isPoster" class="rejection">
+      <p class="error">{{ job.rejection.reason }}</p>
+      <p class="muted">{{ job.rejection.fix_hint }}</p>
+    </div>
 
     <p class="eyebrow">Mission log</p>
     <p v-if="events.error.value" class="error">{{ events.error.value }}</p>
@@ -58,6 +79,15 @@ const stakeHeld = computed(() => props.job.claim && STAKE_HELD_STATES.includes(p
 </template>
 
 <style scoped>
+.rejection {
+  display: grid;
+  gap: 4px;
+}
+
+.rejection p {
+  margin: 0;
+}
+
 .detail {
   padding: 20px;
   max-height: calc(100vh - 190px);

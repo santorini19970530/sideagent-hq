@@ -15,6 +15,7 @@ const signInAction = useAction();
       </NuxtLink>
       <nav v-if="owner" class="nav">
         <NuxtLink to="/">Mission map</NuxtLink>
+        <NuxtLink to="/feed">Counterintelligence</NuxtLink>
         <NuxtLink to="/ledger">Ledger</NuxtLink>
         <NuxtLink to="/agents">Field agents</NuxtLink>
       </nav>
