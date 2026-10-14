@@ -1,0 +1,41 @@
+# Builds the three images and pushes them to Artifact Registry. Run by infra/deploy.sh:
+#   gcloud builds submit --config infra/cloudbuild.yaml --substitutions _TAG=<tag> .
+# _TAG is passed explicitly so the build also works without git ($SHORT_SHA is empty then).
+# Default machine type, no cache pulls: the three builds run in parallel in a few minutes (D32).
+substitutions:
+  _TAG: manual
+  _REGISTRY: us-west1-docker.pkg.dev/${PROJECT_ID}/sideagent
+options:
+  dynamicSubstitutions: true
+timeout: 1200s
+steps:
+  - id: hq
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    args:
+      - build
+      - --platform=linux/amd64
+      - --file=hq/Dockerfile
+      - --tag=${_REGISTRY}/hq:${_TAG}
+      - .
+  - id: field
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    args:
+      - build
+      - --platform=linux/amd64
+      - --file=field/Dockerfile
+      - --tag=${_REGISTRY}/field:${_TAG}
+      - .
+  - id: sandbox-python
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    args:
+      - build
+      - --platform=linux/amd64
+      - --tag=${_REGISTRY}/sandbox-python:${_TAG}
+      - images/python-sandbox
+images:
+  - ${_REGISTRY}/hq:${_TAG}
+  - ${_REGISTRY}/field:${_TAG}
+  - ${_REGISTRY}/sandbox-python:${_TAG}

@@ -1,0 +1,19 @@
+# Build context for hq/Dockerfile and field/Dockerfile (repo root). Dependencies are installed
+# inside the image from the lockfile; nothing local or secret goes in.
+**/node_modules
+**/.data
+**/.nuxt
+**/.output
+**/dist
+**/.env*
+**/*.log
+**/.DS_Store
+.git
+.github
+.claude
+demo/recordings
+docs
+infra
+**/.terraform
+**/*.tfstate*
+**/*.tfvars
