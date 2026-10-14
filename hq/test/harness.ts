@@ -14,7 +14,7 @@ import type { HouseRunnerDispatcher } from "../src/adapters/dispatch/types.ts";
 import { createAdapters } from "../src/adapters/index.ts";
 import { createApp } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
-import type { CheckOutcome, Sandbox } from "../src/sandbox/types.ts";
+import type { CheckOutcome, MutantScore, Sandbox } from "../src/sandbox/types.ts";
 import { createAgent } from "../src/store/agents.ts";
 import { createOwner } from "../src/store/owners.ts";
 
@@ -25,12 +25,15 @@ export const CHEAT = "def add(a, b):\n    return {(1, 2): 3}.get((a, b))  # LOOK
 
 /**
  * Stands in for Docker in pipeline tests. A result passes a category's one test when it holds
- * SOLUTION's body; CHEAT passes only `public`. Set `next` to make the following check return or
- * throw something else. `bundles` records every check, review runs included.
+ * SOLUTION's body; CHEAT passes only `public`; any result passes a test file marked PASSES_EMPTY.
+ * Set `next` to make the following check return or throw something else. `bundles` records
+ * every check, review runs included. Mutant requests are scored as `mutants` (one-shot), 9 of 10
+ * caught by default.
  */
 export function createFakeSandbox() {
   const fake = {
     next: null as (() => Promise<CheckOutcome>) | null,
+    mutants: null as MutantScore | null,
     bundles: [] as Parameters<Sandbox["runChecks"]>[0][],
     runChecks: async (bundle: Parameters<Sandbox["runChecks"]>[0]): Promise<CheckOutcome> => {
       fake.bundles.push(bundle);
@@ -44,11 +47,15 @@ export function createFakeSandbox() {
           .filter(([, files]) => files.length)
           .map(([name, files]) => {
             const failing = files.some((f) => f.content.includes("FAILS_REFERENCE"));
-            const pass = !failing && (ok || (cheat && name === "public"));
+            const always = files.every((f) => f.content.includes("PASSES_EMPTY"));
+            const pass = always || (!failing && (ok || (cheat && name === "public")));
             return [name, { passed: pass ? 1 : 0, total: 1 }];
           }),
       );
       const counts = Object.values(categories);
+      const testsPass = bundle.mutants?.categories.every((c) => categories[c]?.passed);
+      const mutants = fake.mutants ?? { killed: 9, total: 10 };
+      if (bundle.mutants) fake.mutants = null;
       return {
         kind: "scored",
         summary: {
@@ -56,6 +63,7 @@ export function createFakeSandbox() {
           total: counts.length,
           categories,
         },
+        ...(testsPass ? { mutants } : {}),
       };
     },
   };

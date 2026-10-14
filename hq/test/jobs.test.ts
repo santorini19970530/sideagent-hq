@@ -78,7 +78,7 @@ describe("post_job", () => {
     const first = await h.post(keys.poster, spec);
     const second = await h.call(keys.poster, "POST", "/v1/jobs", spec);
     expect(second.status).toBe(200);
-    expect(second.body).toEqual({ ...first.res.body, state: "open" });
+    expect(second.body).toEqual({ ...first.res.body, state: "open", test_strength: 90 });
     const status = JobStatus.parse(
       (await h.call(keys.poster, "GET", `/v1/jobs/${first.jobId}`)).body,
     );

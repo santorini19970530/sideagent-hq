@@ -194,5 +194,6 @@ export function toSummary(jobId: string, job: JobDoc): JobSummary {
     budget: job.budget,
     deadline: job.deadline.toDate().toISOString(),
     created_at: job.createdAt.toDate().toISOString(),
+    ...(job.testStrength?.score != null ? { test_strength: job.testStrength.score } : {}),
   };
 }

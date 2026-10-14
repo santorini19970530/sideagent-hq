@@ -100,7 +100,7 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 ## D15. Python jobs first, JS later (2026-10-13)
 
-**Decision:** Code jobs support `runtime: "python"` (pytest, mutmut) in the prototype. `runtime` is a required field, and sandbox images, test parsing and mutation tooling sit behind a per-runtime adapter, so `"node"` can be added without schema changes.
+**Decision:** Code jobs support `runtime: "python"` (pytest; mutants from a stdlib mutator, D31) in the prototype. `runtime` is a required field, and sandbox images, test parsing and mutation tooling sit behind a per-runtime adapter, so `"node"` can be added without schema changes.
 
 **Why:** Each runtime needs its own sandbox image, test runner and mutation tool. Small models write Python most reliably.
 
@@ -228,3 +228,12 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** A fee makes posting junk cost something and pays for the model calls, and a flat amount is easy to show in the ledger and to tune later.
 
 **Trade-off:** A flat fee is the same for a 1-credit and a 100-credit job.
+
+## D31. Test strength from a stdlib mutator; weak tests open with a fix hint (2026-10-15)
+
+**Decision:** The `review` step scores test strength by mutating the poster's reference solution in `run_checks.py` with Python's `ast` module, not mutmut (this replaces "mutmut" in D15). Sites are comparison, arithmetic and boolean operator swaps, `not` and unary minus removed, constants changed, `return x` → `return None`, and no-argument method calls dropped (`text.lower()` → `text`); docstrings and `raise` statements are skipped. Up to `LIMIT_MUTANTS` (default 12) mutants, spread evenly over all sites, each run against the public and hidden tests; a mutant is caught when any test fails. The score is the percent caught, stored as `testStrength` on the job, shown as `test_strength` on the board and in mission control. Below `TEST_STRENGTH_MIN` (default 60) the job still opens and the poster gets `test_fix_hint`. Separately, an empty answer must fail the public and hidden tests, or the job is rejected as `tests_invalid`; this check also runs for jobs without a reference solution, which open with no score.
+
+**Why:** `run_checks.py` is stdlib-only and hash-pinned, and mutmut 3 brings several dependencies, has no hard cap on mutants and wants its own project layout. A small mutator is deterministic, caps cleanly, and runs inside the sandbox and the pytest setup the checks already use. Rejecting weak tests on a heuristic score would block honest posters; a visible score and a hint keep them informed, and trap checks already protect runners and posters.
+
+**Trade-off:** Some mutants are equivalent (no test could catch them), so the score is a lower bound. The operator set is smaller than mutmut's. Review time grows by about one pytest run per mutant per category, on the order of 10 s at the default cap. The Gemini test reviewer (tests vs spec) is not built yet.
+

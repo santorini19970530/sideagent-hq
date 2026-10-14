@@ -195,15 +195,70 @@ describe("test review", () => {
     expect(bundle.tests.trap?.map((f) => f.path)).toEqual(["test_trap_0_good.py"]);
   });
 
-  it("opens a job without a reference solution with no trap checks", async () => {
+  it("opens a job without a reference solution with no trap checks or score", async () => {
     const keys = await h.agents();
     const { status: s, jobId } = await h.post(
       keys.poster,
       h.jobSpec({ reference_solution: undefined }),
     );
     expect(s?.state).toBe("open");
+    expect(s?.test_strength).toBeUndefined();
+    expect(s?.test_fix_hint).toContain("reference_solution");
     const priv = await h.adapters.db.doc(`jobs/${jobId}/private/main`).get();
     expect(priv.get("trapChecksRef")).toBeNull();
+    // The empty-answer check still runs.
+    const empty = h.sandbox.bundles.filter((b) => b.jobId === jobId);
+    expect(empty).toMatchObject([{ checkId: "review-empty", result: [] }]);
+  });
+
+  it("rejects a job whose tests pass an empty answer", async () => {
+    const keys = await h.agents();
+    const always = (path: string) => [
+      { path, content: "# PASSES_EMPTY\ndef test_x():\n    pass\n" },
+    ];
+    const { status: s, jobId } = await h.post(
+      keys.poster,
+      h.jobSpec({
+        public_tests: always("test_public.py"),
+        hidden_tests: always("test_hidden.py"),
+      }),
+    );
+    expect(s?.state).toBe("rejected");
+    expect(s?.rejection).toMatchObject({
+      code: "tests_invalid",
+      reason: "The tests pass an empty answer",
+    });
+    expect(s?.events.at(-1)?.detail).toBe("Tests rejected: they pass an empty answer");
+    expect(await balance(keys.poster)).toBe(h.config.STARTING_CREDITS - h.config.SCREENING_FEE);
+    expect((await feed(jobId!)).map((e) => e.detail)).toEqual([
+      "Briefing rejected: its tests pass an empty answer",
+    ]);
+  });
+
+  it("scores test strength from mutants of the reference solution", async () => {
+    const keys = await h.agents();
+    const { status: s, jobId } = await h.post(keys.poster);
+    expect(s?.state).toBe("open");
+    expect(s?.test_strength).toBe(90);
+    expect(s?.test_fix_hint).toBeUndefined();
+    expect(s?.events.at(-1)?.detail).toBe("Tests reviewed, strength 90%; open for claims");
+    const review = h.sandbox.bundles.find((b) => b.jobId === jobId && b.checkId === "review");
+    expect(review?.mutants).toEqual({
+      limit: h.config.LIMIT_MUTANTS,
+      categories: ["public", "hidden"],
+    });
+  });
+
+  it("opens a job with weak tests and gives only the poster a fix hint", async () => {
+    const keys = await h.agents();
+    h.sandbox.mutants = { killed: 1, total: 10 };
+    const { status: s, jobId } = await h.post(keys.poster);
+    expect(s?.state).toBe("open");
+    expect(s?.test_strength).toBe(10);
+    expect(s?.test_fix_hint).toContain("caught 1 of 10 small changes");
+    const runner = await status(keys.runner, jobId!);
+    expect(runner.test_strength).toBe(10);
+    expect(runner.test_fix_hint).toBeUndefined();
   });
 
   it("opens the job when the trap writer fails", async () => {

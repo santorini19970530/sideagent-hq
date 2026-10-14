@@ -28,6 +28,16 @@ export const JobSummary = z.object({
   budget: z.number().int(),
   deadline: z.iso.datetime({ offset: true }),
   created_at: z.iso.datetime({ offset: true }),
+  test_strength: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe(
+      "Percent of small breaking changes to the reference solution that the job's tests catch. " +
+        "Set by test review; absent without a reference solution",
+    ),
 });
 export type JobSummary = z.infer<typeof JobSummary>;
 
@@ -83,6 +93,12 @@ export const JobStatus = JobSummary.extend({
   rejection: ApiError.optional().describe(
     "Why screening or test review rejected the job; shown to the poster. Fix and post again",
   ),
+  test_fix_hint: z
+    .string()
+    .optional()
+    .describe(
+      "How to make the job's tests stronger; shown to the poster when test review finds them weak",
+    ),
   redactions: z
     .record(z.string(), z.number().int().positive())
     .optional()

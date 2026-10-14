@@ -60,12 +60,23 @@ export interface JobView<T extends TimestampLike = TimestampLike> {
   redactions?: Record<string, number>;
   /** Why screening or test review rejected the job. */
   rejection?: ApiError;
+  /** Set by test review when the job opens. */
+  testStrength?: TestStrengthView;
   /** When the `dispatch` step started a house runner for this job; absent if it never did. */
   dispatchedAt?: T;
   /** Number of events written; the next event's sequence number. */
   eventSeq: number;
   createdAt: T;
   updatedAt: T;
+}
+
+export interface TestStrengthView {
+  /** Percent of mutants of the reference solution the tests caught; null without one. */
+  score: number | null;
+  killed: number;
+  mutants: number;
+  /** How to make the tests stronger; shown to the poster. */
+  fixHint: string | null;
 }
 
 /** `jobs/{jobId}/events/{seq}`, zero-padded so IDs sort by `seq`. HQ returns it as `JobEvent`. */

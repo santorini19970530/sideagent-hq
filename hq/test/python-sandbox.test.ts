@@ -93,11 +93,16 @@ async function check(files: Files) {
       throw err;
     }
   };
-  const [summary, error] = await Promise.all([read("summary.json"), read("error.json")]);
+  const [summary, error, mutants] = await Promise.all([
+    read("summary.json"),
+    read("error.json"),
+    read("mutants.json"),
+  ]);
   return {
     code,
     summary: summary === undefined ? undefined : TestSummary.parse(summary),
     error: error === undefined ? undefined : ApiError.parse(error),
+    mutants,
   };
 }
 
@@ -120,6 +125,54 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
         code: 0,
         summary: ALL_PASS,
         error: undefined,
+        mutants: undefined,
+      });
+    });
+
+    describe("mutants", () => {
+      const config = (limit: number) =>
+        JSON.stringify({ mutants: { limit, categories: ["public", "hidden"] } });
+      // Five sites: the comparison, both subtractions and both returns.
+      const ABS_DIFF = "def diff(a, b):\n    if a > b:\n        return a - b\n    return b - a\n";
+      const diffTests = (body: string): Files => ({
+        "tests/public/test_public.py": `from solution import diff\n\ndef test_one():\n    ${body}\n`,
+        "tests/hidden/test_hidden.py": "def test_nothing():\n    pass\n",
+        "result/solution.py": ABS_DIFF,
+      });
+
+      it("counts the mutants that strong tests catch", async () => {
+        const { summary, mutants } = await check({
+          ...diffTests("assert diff(5, 2) == 3 and diff(2, 5) == 3 and diff(4, 4) == 0"),
+          "config.json": config(12),
+        });
+        expect(summary).toMatchObject({ passed: 2, total: 2 });
+        expect(mutants).toEqual({ killed: 5, total: 5 });
+      });
+
+      it("scores weak tests low", async () => {
+        const { mutants } = await check({
+          ...diffTests("assert diff(5, 2) is not None"),
+          "config.json": config(12),
+        });
+        expect(mutants).toEqual({ killed: 1, total: 5 });
+      });
+
+      it("caps the mutants at the limit", async () => {
+        const { mutants } = await check({
+          ...diffTests("assert diff(5, 2) == 3"),
+          "config.json": config(2),
+        });
+        expect(mutants).toMatchObject({ total: 2 });
+      });
+
+      it("skips mutants when the result fails the tests", async () => {
+        const { summary, mutants } = await check({
+          ...TESTS,
+          "result/solution.py": WRONG,
+          "config.json": config(12),
+        });
+        expect(summary).toMatchObject({ passed: 0 });
+        expect(mutants).toBeUndefined();
       });
     });
 
@@ -265,6 +318,16 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
       expect(await sandbox.runChecks(bundle(WRONG))).toMatchObject({
         kind: "scored",
         summary: { passed: 0, total: 3 },
+      });
+    });
+
+    it("returns the mutant score when asked for one", async () => {
+      const mutants = { limit: 12, categories: ["public", "hidden"] };
+      // SOLUTION has two sites, the addition and the return; both are caught.
+      expect(await sandbox.runChecks({ ...bundle(SOLUTION), mutants })).toMatchObject({
+        kind: "scored",
+        summary: { passed: 3, total: 3 },
+        mutants: { killed: 2, total: 2 },
       });
     });
 

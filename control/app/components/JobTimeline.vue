@@ -13,6 +13,7 @@ const events = useLiveQuery<JobEventView<Timestamp>>(() =>
 const isPoster = computed(() => props.job.posterOwnerId === owner.value?.owner_id);
 const check = computed(() => props.job.lastCheck?.summary ?? null);
 const stakeHeld = computed(() => props.job.claim && STAKE_HELD_STATES.includes(props.job.state));
+const strength = computed(() => props.job.testStrength ?? null);
 const redacted = computed(() =>
   Object.entries(props.job.redactions ?? {})
     .map(([type, n]) => `${n} ${type.toLowerCase()}`)
@@ -60,7 +61,15 @@ const redacted = computed(() =>
         <dt>Eyes only</dt>
         <dd class="mono">{{ redacted }}</dd>
       </div>
+      <div v-if="strength?.score != null">
+        <dt>Test strength</dt>
+        <dd class="mono">
+          {{ strength.score }}% · {{ strength.killed }}/{{ strength.mutants }} caught
+        </dd>
+      </div>
     </dl>
+
+    <p v-if="strength?.fixHint && isPoster" class="muted hint">{{ strength.fixHint }}</p>
 
     <div v-if="job.rejection && isPoster" class="rejection">
       <p class="error">{{ job.rejection.reason }}</p>
@@ -84,7 +93,8 @@ const redacted = computed(() =>
   gap: 4px;
 }
 
-.rejection p {
+.rejection p,
+.hint {
   margin: 0;
 }
 

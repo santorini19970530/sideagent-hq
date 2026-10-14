@@ -394,6 +394,7 @@ export function createJobService({
     if (role === "poster") {
       if (job.rejection) status.rejection = job.rejection;
       if (job.redactions) status.redactions = job.redactions;
+      if (job.testStrength?.fixHint) status.test_fix_hint = job.testStrength.fixHint;
     }
     // Posters never see a result before it passes and is released. Private values come back
     // only here, on the poster's side.

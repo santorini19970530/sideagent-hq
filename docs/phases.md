@@ -158,6 +158,8 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 
 **If behind:** keep only the reference-solution and empty-answer checks; move the mutation score to the roadmap slide.
 
+- Done locally (2026-10-15): the empty-answer check (tests an empty answer passes get the job rejected as `tests_invalid`) and the strength score from up to 12 mutants of the reference solution (D31). Weak tests open with `test_strength` on the board and in mission control, and a `test_fix_hint` for the poster only. Covered by tests with the fake sandbox and against the Docker image (`assert diff(5, 2) is not None` catches 1 of 5 mutants; exact asserts catch 5 of 5). Not yet: the test-reviewer agent (tests contradicting the spec), platform-written tests, and a recorded demo against live HQ.
+
 ## Phase 7: Deploy to GCP
 
 Starts by day 4 at 3pm at the latest.

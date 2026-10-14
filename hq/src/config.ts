@@ -49,6 +49,10 @@ const Config = z.object({
   SCREENING_FEE: z.coerce.number().int().nonnegative().default(1),
   // Trap failures before a runner is burned (D29).
   TRAP_BURN_AFTER: z.coerce.number().int().positive().default(1),
+  // Test review (D31): mutants of the reference solution per job, and the strength score below
+  // which the poster gets a fix hint.
+  LIMIT_MUTANTS: z.coerce.number().int().min(1).max(50).default(12),
+  TEST_STRENGTH_MIN: Percent.default(60),
   REDACTOR_BACKEND: z.enum(["pattern", "dlp"]).default("pattern"),
   VAULT_BACKEND: z.enum(["local", "kms"]).default("local"),
   // Local vault key: base64 of 32 bytes. Without it, one is generated into VAULT_LOCAL_KEY_FILE.

@@ -94,7 +94,7 @@ Rules:
 
 - **Public vs hidden.** A job must have a spec and at least a few public example tests. Hidden tests decide pass/fail.
 - **Validity.** Gemini checks that hidden tests are consistent with the spec ("test expects X, spec says Y"). The poster supplies a reference solution that passes all tests, or at least the platform confirms tests fail on an empty or placeholder answer. This stops posters rigging impossible tests.
-- **Strength score.** Mutation testing on the reference solution: apply small breaking changes and count how many the tests catch. The score is shown on the job.
+- **Strength score.** Mutation testing on the reference solution: apply small breaking changes and count how many the tests catch. The score is shown on the job; weak tests still open, with a fix hint for the poster (D31).
 - **Platform tests.** If tests are missing or weak, Gemini writes additional hidden tests (a fee in credits). The platform always adds a few hidden trap checks of its own, so runners can't learn which jobs are safe to fake. Gemini drafts them from the spec and public tests, and only drafts the poster's reference solution passes are kept (D29).
 - **Non-code jobs** use a hidden rubric plus reference answers, graded by a Gemini judge.
 

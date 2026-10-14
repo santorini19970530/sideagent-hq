@@ -4,19 +4,23 @@
       Laptop runners: run public tests in /work and print the pytest output.
   check
       HQ: score /job/result against each /job/tests/<category>/ and write /out/summary.json
-      (counts only), or /out/error.json when the result is rejected.
+      (counts only), or /out/error.json when the result is rejected. When /job/config.json asks
+      for mutants, also score the tests themselves: how many small breaking changes to the
+      result they catch, in /out/mutants.json.
 
 Code under test runs in a child process with a fixed environment and its own process group. See
 "Test sandbox" in docs/technical.md for the known gaps.
 """
 
 import argparse
+import ast
 import json
 import os
 import shutil
 import signal
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 from typing import IO
@@ -30,6 +34,13 @@ SANDBOX_UID = 10001
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 600
 MAX_OUTPUT_BYTES = 64 * 1024
+MAX_MUTANTS = 50
+# Per pytest run on a mutant; a mutant that loops until then counts as caught.
+MUTANT_TIMEOUT = 10
+# All mutants together; mutants not started by then are left out of the score, which keeps the
+# whole review run inside HQ's sandbox timeout.
+MUTANT_BUDGET = 120
+MUTANT_DIR = Path("/tmp/mutant")
 
 CHILD_ENV = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -158,7 +169,7 @@ def verdict(
 
 
 def score_category(
-    category: str, result: list[PurePosixPath], timeout: int
+    category: str, result: list[PurePosixPath], timeout: int, source: Path = JOB / "result"
 ) -> tuple[int, int]:
     tests_dir = JOB / "tests" / category
     tests = list_files(tests_dir)
@@ -174,7 +185,7 @@ def score_category(
     junit = SCRATCH / f"{category}.xml"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
-    copy_tree(JOB / "result", result, work)
+    copy_tree(source, result, work)
     copy_tree(tests_dir, tests, work)
     try:
         code = run_pytest(
@@ -191,26 +202,190 @@ def score_category(
     return verdict(code, counts, max(len(test_files), 1))
 
 
-def load_timeout() -> int:
+# Operator swaps for mutants: each turns working code into nearly the same, wrong code.
+SWAPS: dict[type, type] = {
+    ast.Eq: ast.NotEq,
+    ast.NotEq: ast.Eq,
+    ast.Lt: ast.GtE,
+    ast.GtE: ast.Lt,
+    ast.Gt: ast.LtE,
+    ast.LtE: ast.Gt,
+    ast.In: ast.NotIn,
+    ast.NotIn: ast.In,
+    ast.Is: ast.IsNot,
+    ast.IsNot: ast.Is,
+    ast.Add: ast.Sub,
+    ast.Sub: ast.Add,
+    ast.Mult: ast.FloorDiv,
+    ast.Div: ast.Mult,
+    ast.FloorDiv: ast.Mult,
+    ast.Mod: ast.FloorDiv,
+    ast.And: ast.Or,
+    ast.Or: ast.And,
+}
+
+
+class Mutator(ast.NodeTransformer):
+    """Numbers mutation sites in source order and applies the one numbered `target` (-1: none).
+
+    Children are numbered before their parent, so a count with target -1 and a later run with a
+    target agree on every site up to the target."""
+
+    def __init__(self, target: int):
+        self.target = target
+        self.sites = 0
+
+    def hit(self) -> bool:
+        self.sites += 1
+        return self.sites - 1 == self.target
+
+    def visit_Expr(self, node: ast.Expr) -> ast.AST:
+        # A docstring or bare constant does nothing, so changing it would never be caught.
+        return node if isinstance(node.value, ast.Constant) else self.generic_visit(node)
+
+    def visit_arg(self, node: ast.arg) -> ast.AST:
+        # Annotations don't run.
+        return node
+
+    def visit_Raise(self, node: ast.Raise) -> ast.AST:
+        # Error messages are rarely part of a spec; tests that check the error type still pass.
+        return node
+
+    def visit_Compare(self, node: ast.Compare) -> ast.AST:
+        self.generic_visit(node)
+        for i, op in enumerate(node.ops):
+            if type(op) in SWAPS and self.hit():
+                node.ops[i] = SWAPS[type(op)]()
+        return node
+
+    def swap_op(self, node: ast.BinOp | ast.AugAssign | ast.BoolOp) -> ast.AST:
+        self.generic_visit(node)
+        if type(node.op) in SWAPS and self.hit():
+            node.op = SWAPS[type(node.op)]()
+        return node
+
+    visit_BinOp = visit_AugAssign = visit_BoolOp = swap_op
+
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> ast.AST:
+        self.generic_visit(node)
+        if isinstance(node.op, (ast.Not, ast.USub)) and self.hit():
+            return node.operand
+        return node
+
+    def visit_Constant(self, node: ast.Constant) -> ast.AST:
+        value = node.value
+        if isinstance(value, bool):
+            if self.hit():
+                return ast.Constant(not value)
+        elif isinstance(value, (int, float)):
+            if self.hit():
+                return ast.Constant(value + 1)
+        elif isinstance(value, str):
+            if self.hit():
+                return ast.Constant(value + "XX")
+        return node
+
+    def visit_Return(self, node: ast.Return) -> ast.AST:
+        self.generic_visit(node)
+        returns_none = node.value is None or (
+            isinstance(node.value, ast.Constant) and node.value.value is None
+        )
+        if not returns_none and self.hit():
+            return ast.Return(None)
+        return node
+
+    def visit_Call(self, node: ast.Call) -> ast.AST:
+        # `text.lower()` → `text`: drops a no-argument method call.
+        self.generic_visit(node)
+        if isinstance(node.func, ast.Attribute) and not node.args and not node.keywords:
+            if self.hit():
+                return node.func.value
+        return node
+
+
+def count_sites(source: str) -> int:
+    counter = Mutator(-1)
+    counter.visit(ast.parse(source))
+    return counter.sites
+
+
+def mutate(source: str, site: int) -> str:
+    tree = Mutator(site).visit(ast.parse(source))
+    return ast.unparse(ast.fix_missing_locations(tree))
+
+
+def plan_mutants(result: list[PurePosixPath], limit: int) -> list[tuple[PurePosixPath, str]]:
+    """Up to `limit` (file, mutated source) pairs, spread evenly over every site in the result's
+    code files. Files that don't parse are skipped: the tests decide whether they matter."""
+    sites: list[tuple[PurePosixPath, str, int]] = []
+    for rel in result:
+        if rel.suffix != ".py" or is_test_file(rel):
+            continue
+        source = (JOB / "result" / rel).read_text(errors="replace")
+        try:
+            sites.extend((rel, source, i) for i in range(count_sites(source)))
+        except (SyntaxError, ValueError, RecursionError):
+            continue
+    if len(sites) > limit:
+        sites = [sites[i * len(sites) // limit] for i in range(limit)]
+    return [(rel, mutate(source, i)) for rel, source, i in sites]
+
+
+def score_mutants(
+    result: list[PurePosixPath], categories: list[str], limit: int, timeout: int
+) -> dict:
+    """Mutants of the result, and how many the tests in `categories` catch (any test fails)."""
+    deadline = time.monotonic() + MUTANT_BUDGET
+    killed = run = 0
+    for rel, source in plan_mutants(result, limit):
+        if time.monotonic() > deadline:
+            break
+        run += 1
+        shutil.rmtree(MUTANT_DIR, ignore_errors=True)
+        copy_tree(JOB / "result", result, MUTANT_DIR)
+        (MUTANT_DIR / rel).write_text(source)
+        for category in categories:
+            passed, total = score_category(
+                category, result, min(timeout, MUTANT_TIMEOUT), MUTANT_DIR
+            )
+            if passed < total:
+                killed += 1
+                break
+    shutil.rmtree(MUTANT_DIR, ignore_errors=True)
+    return {"killed": killed, "total": run}
+
+
+def load_config() -> tuple[int, dict | None]:
+    """Per-category timeout, and the mutants request: {"limit": N, "categories": [...]}."""
     try:
         config = json.loads((JOB / "config.json").read_text())
     except FileNotFoundError:
-        return DEFAULT_TIMEOUT
+        return DEFAULT_TIMEOUT, None
     timeout = config.get("timeout_seconds", DEFAULT_TIMEOUT)
     if type(timeout) is not int or not 1 <= timeout <= MAX_TIMEOUT:
         raise SystemExit(f"timeout_seconds must be an integer from 1 to {MAX_TIMEOUT}")
-    return timeout
+    mutants = config.get("mutants")
+    if mutants is not None:
+        if not isinstance(mutants, dict):
+            raise SystemExit("mutants must be an object with limit and categories")
+        limit, categories = mutants.get("limit"), mutants.get("categories")
+        if type(limit) is not int or not 1 <= limit <= MAX_MUTANTS:
+            raise SystemExit(f"mutants.limit must be an integer from 1 to {MAX_MUTANTS}")
+        if not isinstance(categories, list) or not all(isinstance(c, str) for c in categories):
+            raise SystemExit("mutants.categories must be a list of category names")
+    return timeout, mutants
 
 
-def write_output(name: str, body: dict) -> None:
-    # Written last, after every test process is dead, so it replaces anything a test wrote.
-    for stale in ("summary.json", "error.json"):
+def write_outputs(outputs: dict[str, dict]) -> None:
+    # Written last, after every test process is dead, so they replace anything a test wrote.
+    for stale in ("summary.json", "error.json", "mutants.json"):
         (OUT / stale).unlink(missing_ok=True)
-    (OUT / name).write_text(json.dumps(body))
+    for name, body in outputs.items():
+        (OUT / name).write_text(json.dumps(body))
 
 
 def check() -> int:
-    timeout = load_timeout()
+    timeout, mutants = load_config()
     categories = sorted(p.name for p in (JOB / "tests").iterdir() if p.is_dir())
     if not categories:
         raise SystemExit("No test categories in /job/tests")
@@ -228,13 +403,25 @@ def check() -> int:
             summary["categories"][category] = {"passed": passed, "total": total}
             summary["passed"] += passed
             summary["total"] += total
+        outputs = {"summary.json": summary}
+        # Mutants only mean something when the unchanged result passes the tests they run.
+        scored = [summary["categories"].get(c) for c in mutants["categories"]] if mutants else []
+        if scored and all(c and c["passed"] == c["total"] for c in scored):
+            outputs["mutants.json"] = score_mutants(
+                result, mutants["categories"], mutants["limit"], timeout
+            )
     except Rejected as err:
-        write_output(
-            "error.json",
-            {"code": "invalid_request", "reason": err.reason, "fix_hint": err.fix_hint},
+        write_outputs(
+            {
+                "error.json": {
+                    "code": "invalid_request",
+                    "reason": err.reason,
+                    "fix_hint": err.fix_hint,
+                }
+            }
         )
         return 2
-    write_output("summary.json", summary)
+    write_outputs(outputs)
     return 0
 
 
