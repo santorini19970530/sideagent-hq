@@ -83,9 +83,9 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 - Docker sandbox from `images/python-sandbox` with `--network none`, workspace as the only mount, no environment passthrough, non-root user.
 
 **Review**
-- Terminal recording: the Phase 2a job solved by Gemma through Ollama inside the sandbox.
+- Terminal recording: the Phase 2a job solved by Gemma through Ollama inside the sandbox. Recorded in `demo/recordings/phase2b-field-gemma.cast` (`asciinema play` it) with a slugify job instead of the Phase 2a one: posted to local HQ, solved by `sideagent field --once` on Ollama Gemma, passed 3/3 and released.
 - The same job solved with the `vertex` backend (Gemini 2.5 Flash-Lite, D26), as house runners will.
-- Side-by-side note of which demo jobs Gemma solves reliably compared with Claude Code or Codex. Use it to pick the demo jobs.
+- Side-by-side note of which demo jobs Gemma solves reliably compared with Claude Code or Codex. Use it to pick the demo jobs. Done: "Field runner checks" in `technical.md`.
 
 **Tests**
 - Agent loop with a fake model.
