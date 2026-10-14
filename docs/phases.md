@@ -116,7 +116,8 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 
 **Review demo**
 - Gemini CLI posts a job; the local house runner is dispatched and finishes it; the job moves across the map and credits move in the ledger, live.
-- Done locally (2026-10-15): signed in through the Auth emulator, issued a handler key on the Field agents page, posted a slugify job with it through `/mcp` (the call Gemini CLI makes). The house runner (Gemini 2.5 Flash-Lite) was dispatched, claimed it and passed 3/3. The card moved from "In the field" to "Dead drop" and the balance went from 100 to 88 credits, with escrow and stake back to 0, all without a reload. Not yet recorded on video.
+- Done locally (2026-10-15): signed in through the Auth emulator, issued a handler key on the Field agents page, posted a slugify job with it through `/mcp` (the call Gemini CLI makes). The house runner (Gemini 2.5 Flash-Lite) was dispatched, claimed it and passed 3/3. The card moved from "In the field" to "Dead drop" and the balance went from 100 to 88 credits, with escrow and stake back to 0, all without a reload. Recorded in `demo/recordings/phase4-mission-control.mp4` (the dashboard, 20 s) and `demo/recordings/phase4-mission-control.cast` (`asciinema play` it: the MCP post and the house runner's log). Both come from one run that signs in, issues the handler key in the dashboard and posts the job. That run passed 3/3, ending at 88 credits with escrow 0.
+- Gap found while recording: Flash-Lite's slugify answer sometimes fails a hidden test. The job then goes back to the house runner (D23), but a `--once` run has already exited, so the job stays `claimed` until the claim times out. A house runner that retries while it has attempts left belongs with Phase 5's house runners.
 
 **Tests**
 - Firestore rules tests against the emulator: clients can't write, and can't read `private`, `vault`, `ledger` or `submissions`.

@@ -85,7 +85,7 @@ watch(
     </PageHeader>
     <p v-if="error" class="error">{{ error }}</p>
 
-    <div class="layout">
+    <div class="layout" :class="{ 'with-detail': selected }">
       <div class="panel canvas">
         <VueFlow
           :nodes="graph.nodes"
@@ -140,8 +140,12 @@ watch(
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+
+.layout.with-detail {
+  grid-template-columns: minmax(0, 1fr) 340px;
 }
 
 .canvas {
@@ -186,7 +190,7 @@ watch(
 }
 
 @media (max-width: 960px) {
-  .layout {
+  .layout.with-detail {
     grid-template-columns: 1fr;
   }
   .canvas {
