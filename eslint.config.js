@@ -12,6 +12,8 @@ export default tseslint.config(
       "protocol/schemas/",
       "**/.nuxt/",
       "**/.output/",
+      // Mission control's build output, copied there by infra/deploy.sh for Firebase Hosting.
+      "infra/.hosting/",
     ],
   },
   js.configs.recommended,
