@@ -33,17 +33,15 @@ export const ScreeningRecord = z.object({
 });
 export type ScreeningRecord = z.infer<typeof ScreeningRecord>;
 
+// Lenient on purpose: one draft off the format would otherwise discard the whole answer (seen
+// live: a name off the pattern left a job without trap checks). The trap writer cleans names
+// and drops drafts it can't use.
 export const TrapTestDrafts = z.object({
-  tests: z
-    .array(
-      z.object({
-        name: z
-          .string()
-          .regex(/^[a-z0-9_]{1,40}$/)
-          .describe("snake_case, used in the file name"),
-        content: z.string().max(8000).describe("A complete test file"),
-      }),
-    )
-    .max(5),
+  tests: z.array(
+    z.object({
+      name: z.string().describe("snake_case, at most 40 characters, used in the file name"),
+      content: z.string().describe("A complete test file, at most 8000 characters"),
+    }),
+  ),
 });
 export type TrapTestDrafts = z.infer<typeof TrapTestDrafts>;

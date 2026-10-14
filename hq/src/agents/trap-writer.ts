@@ -5,6 +5,7 @@ import type { PlatformModel } from "./model.ts";
 import { dataRule, delimit } from "./platform-agent.ts";
 
 export const TRAP_COUNT = 3;
+const MAX_TRAP_BYTES = 8000;
 // Gemini 2.5 Flash took about 40 s unbounded and about 9 s at this budget, with drafts as good.
 const THINKING_BUDGET = 1024;
 
@@ -40,5 +41,18 @@ export async function draftTrapTests(
     maxOutputTokens: 8192,
     thinkingBudget: THINKING_BUDGET,
   });
-  return value.tests.slice(0, TRAP_COUNT);
+  return value.tests
+    .filter((t) => t.content.trim() && t.content.length <= MAX_TRAP_BYTES)
+    .slice(0, TRAP_COUNT)
+    .map((t, i) => ({ name: fileSafeName(t.name, i), content: t.content }));
+}
+
+/** A model-written name as `[a-z0-9_]{1,40}`, since it becomes part of a file path. */
+export function fileSafeName(name: string, index: number): string {
+  const safe = name
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  return safe || `trap_${index}`;
 }

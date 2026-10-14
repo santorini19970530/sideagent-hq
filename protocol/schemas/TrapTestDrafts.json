@@ -3,20 +3,17 @@
   "type": "object",
   "properties": {
     "tests": {
-      "maxItems": 5,
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[a-z0-9_]{1,40}$",
-            "description": "snake_case, used in the file name"
+            "description": "snake_case, at most 40 characters, used in the file name"
           },
           "content": {
             "type": "string",
-            "maxLength": 8000,
-            "description": "A complete test file"
+            "description": "A complete test file, at most 8000 characters"
           }
         },
         "required": [

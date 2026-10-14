@@ -195,6 +195,32 @@ describe("test review", () => {
     expect(bundle.tests.trap?.map((f) => f.path)).toEqual(["test_trap_0_good.py"]);
   });
 
+  it("keeps the usable trap drafts when one is off the format", async () => {
+    // Seen live: one draft's name broke the pattern and the job opened with no trap checks.
+    const keys = await h.agents();
+    const runner = await h.agents();
+    const test = "def test_x():\n    assert add(5, 7) == 12\n";
+    h.model.answers["trap-writer"] = {
+      value: {
+        tests: [
+          { name: "Large-Numbers Check!", content: test },
+          { name: "huge", content: `${test}#${"x".repeat(9000)}` },
+          { name: "../../etc", content: test },
+          { name: "", content: test },
+          { name: "fourth", content: test },
+        ],
+      },
+    };
+    const { jobId } = await h.post(keys.poster);
+    await claimAndSubmit(runner.runner, jobId!, SOLUTION);
+    const bundle = h.sandbox.bundles.findLast((b) => b.jobId === jobId)!;
+    expect(bundle.tests.trap?.map((f) => f.path)).toEqual([
+      "test_trap_0_large_numbers_check.py",
+      "test_trap_1_etc.py",
+      "test_trap_2_trap_2.py",
+    ]);
+  });
+
   it("opens a job without a reference solution with no trap checks or score", async () => {
     const keys = await h.agents();
     const { status: s, jobId } = await h.post(
