@@ -21,11 +21,17 @@ import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 from typing import IO
 
-PYTEST_INI = "/opt/sideagent/pytest.ini"
+SCRIPT_DIR = Path(__file__).resolve().parent
+_CONTAINER_INI = Path("/opt/sideagent/pytest.ini")
+# The container image keeps the fixed paths. A host run (no Docker) passes its own directories.
+PYTEST_INI = os.environ.get(
+    "SIDEAGENT_PYTEST_INI",
+    str(_CONTAINER_INI if _CONTAINER_INI.is_file() else SCRIPT_DIR / "pytest.ini"),
+)
 WORK = Path("/work")
-JOB = Path("/job")
-OUT = Path("/out")
-SCRATCH = Path("/tmp/check")
+JOB = Path(os.environ.get("SIDEAGENT_JOB_DIR", "/job"))
+OUT = Path(os.environ.get("SIDEAGENT_OUT_DIR", "/out"))
+SCRATCH = Path(os.environ.get("SIDEAGENT_SCRATCH_DIR", "/tmp/check"))
 SANDBOX_UID = 10001
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 600
@@ -105,13 +111,25 @@ def kill_strays(pgid: int) -> None:
             pass
 
 
+def pytest_launch() -> tuple[list[str], dict[str, str]]:
+    """Container runs keep the locked-down env. A host run uses the installed pytest."""
+    command = ["pytest", "-c", PYTEST_INI]
+    if _CONTAINER_INI.is_file():
+        return command, dict(CHILD_ENV)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("SIDEAGENT_")}
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return [shutil.which("pytest") or "pytest", *command[1:]], env
+
+
 def run_pytest(cwd: Path, args: list[str], timeout: int, stdout: int | IO[bytes]) -> int | None:
     """Exit code, or None on timeout. Every process the tests started is dead on return."""
+    command, env = pytest_launch()
     proc = subprocess.Popen(
         # The console script, not `python -m`, so cwd isn't on sys.path ahead of pytest.
-        ["pytest", "-c", PYTEST_INI, "--rootdir", str(cwd), "--noconftest", *args],
+        [*command, "--rootdir", str(cwd), "--noconftest", *args],
         cwd=cwd,
-        env=CHILD_ENV,
+        env=env,
         stdin=subprocess.DEVNULL,
         stdout=stdout,
         stderr=subprocess.STDOUT,
