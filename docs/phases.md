@@ -137,7 +137,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 3. The double agent fails a trap check, is burned and loses its stake.
 
 - Done locally (2026-10-15) with `pnpm demo:counterintel` against Gemini on Vertex AI and the Docker sandbox: the `.env` job was rejected in 1.6 s with a fix hint and a feed entry; the private-data job reached the runner as `[EMAIL_1]` and `[ACCT_1]` and the poster got the real values back; the double agent's lookup table of the public answers failed the trap checks (D29), lost its stake and was burned. The script plays the double agent with the same code as `SIDEAGENT_SIMULATE_CHEAT=1`; with `HOUSE_RUNNER_DOUBLE_AGENT=1` HQ dispatches it as a house runner instead. Results under "Counterintelligence checks" in `technical.md`.
-- Also done: the first part of Phase 6 test review (the reference solution must pass its tests), because trap checks need it. Not yet: `REDACTOR_BACKEND=dlp` (Sensitive Data Protection) and the Cloud KMS vault, which come with Phase 7.
+- Also done: the first part of Phase 6 test review (the reference solution must pass its tests), because trap checks need it. `REDACTOR_BACKEND=dlp` (Sensitive Data Protection) and the Cloud KMS vault came with Phase 7.
 
 **Tests**
 - Screener eval set reports block rate and false positives (run on demand, not in CI): `pnpm --filter @sideagent/hq eval:screening`, 6/6 blocked and 0/6 false positives on Flash-Lite.
@@ -173,6 +173,8 @@ Starts by day 4 at 3pm at the latest.
 - Gemini API fallback backend tested against production.
 - Spend caps (D32), built and tested locally first: HQ limits on posts per owner per hour, posts per day and checks per job, the `config/platform.paused` kill switch and the house-runner token cap; GCP settings in the scripts (HQ max 2 instances, jobs with `--max-retries 0` and a task timeout, Cloud Tasks `--max-attempts 5`); the $10 budget with the `budget-guard` function (pause at 100%, billing off at 200%). `terraform destroy` removes everything billable after judging.
 - Done locally (2026-10-15): the HQ caps (`LIMIT_POSTS_PER_HOUR`, `LIMIT_POSTS_PER_DAY`, `LIMIT_CHECKS_PER_JOB`), the kill switch and `HOUSE_RUNNER_MAX_TOKENS`, covered by `hq/test/limits.test.ts`.
+- Deployed (2026-10-15): Terraform applied (79 resources), images built and rolled out, house-runner keys seeded. A job posted to live HQ went through screening, test review on the Cloud Run sandbox, a dispatched house runner and a 12/12 check to release in about 2.5 minutes; the budget guard paused the platform on a 100% notification and posts were refused. Details under "Production checks" in `technical.md`. Sandbox steps run one at a time on their own queue, so concurrent checks can't see each other's hidden tests.
+- Not yet: mission control on Firebase Hosting (Firebase is linked and the web app registered; Google sign-in has to be turned on in the console, and the Firebase CLI needs the project owner's login), the Gemini CLI demo against live HQ, the per-hour limit and the 200% billing-off path live, and the GitHub Actions deploy steps.
 
 **Review demo**
 - Gemini CLI pointed at the live HQ posts a job; HQ dispatches a house runner; the result comes back; the job moves in the dashboard on its Firebase URL.

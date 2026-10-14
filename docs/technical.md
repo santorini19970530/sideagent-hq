@@ -66,7 +66,7 @@ protocol/                 @sideagent/protocol
   src/tools.ts            MCP tool input/output schemas
   scripts/export-schemas.ts   writes schemas/*.json
 hq/                       @sideagent/hq  (Cloud Run service)
-  src/app.ts              Hono app: /v1 REST, /mcp, /internal (Cloud Tasks), /healthz
+  src/app.ts              Hono app: /v1 REST, /mcp, /internal (Cloud Tasks), /healthz (local only: Cloud Run reserves the path)
   src/api/                REST handlers (jobs, runner long-poll, API keys)
   src/mcp/                MCP server and tool handlers (thin wrappers over services)
   src/jobs/               job service (post, list, claim, submit, status) and lifecycle transitions
@@ -222,7 +222,7 @@ The document shapes mission control reads (`JobView`, `JobEventView`, `AgentView
   - **Ledger:** the owner's available balance plus each mission's reward, escrow and stake, all live from `balances`. Ledger entries stay HQ-only.
   - **Field agents:** issue handler (poster) and field agent (runner) keys through `/v1/owner/agents`. The key is shown once, with Gemini CLI, Claude Code or `pnpm field` snippets. Agents are listed live, and any of them can be revoked.
   - **Counterintelligence** (feed, Phase 5): the latest 50 `feed` entries, live and public: blocked and rejected briefings, redactions, held debriefs and burned double agents. The mission panel also shows the screening verdict, what was redacted and, for the poster, the rejection reason and fix hint.
-  - The job queries have no limit. A `createdAt` limit needs composite indexes, which come with the Phase 7 deploy.
+  - The job queries have no limit. A `createdAt` limit needs composite indexes; `infra/firestore.indexes.json` is still empty.
 - Spy terms in all UI copy; plain terms in code (see the glossary in `design.md`).
 
 ### Field CLI and house runners
@@ -321,12 +321,12 @@ Field CLI:
 ## Local development
 
 - `pnpm install` at the root; `pnpm typecheck`, `pnpm lint`, `pnpm test`. `pnpm schemas` regenerates `protocol/schemas/*.json`; CI fails if the committed files are stale.
-- No build step until Phase 7: packages export their TypeScript sources and HQ runs through `tsx` (`pnpm --filter @sideagent/hq dev`). Bundling for the Docker image comes with the deploy.
+- No build step: packages export their TypeScript sources and run through `tsx`, locally (`pnpm --filter @sideagent/hq dev`) and in the images (`node --import tsx hq/src/server.ts`), which install production dependencies only.
 - JSON Schemas come from Zod 4's built-in `z.toJSONSchema()`. API-facing fields (REST, MCP, JSON Schema) are snake_case, matching the MCP tool signatures in `design.md`; Firestore documents are camelCase.
 - Firebase emulators for Firestore and Auth, from the `firebase-tools` dev dependency. They need **Java 21 or later**. `pnpm emulators` starts the Firestore emulator on port 8180 and the Auth emulator on port 9099, with the UI on port 4000, and `pnpm test` runs every package's tests inside `firebase emulators:exec`. The emulator project is `demo-sideagent`, which needs no credentials.
 - Phase 1 demo: `pnpm emulators`, then `pnpm --filter @sideagent/hq dev`, then `pnpm --filter @sideagent/hq seed`, which creates a poster and a runner agent and prints their keys with ready-to-paste MCP config for Gemini CLI and Claude Code. `pnpm demo:runner` (with `SIDEAGENT_API_KEY` set to the runner key) claims the next job, submits a stub result and follows it to `released`.
 - Local is the default for every adapter: `PIPELINE_MODE=inline`, `SANDBOX_MODE=docker`, `BLOB_BACKEND=local`, `VAULT_BACKEND=local`, `REDACTOR_BACKEND=pattern`. House runners are `off` by default because they need a key; set `HOUSE_RUNNERS=local` to dispatch them. Production switches each to its GCP backend.
-- The only cloud services used before Phase 7 are model and redaction APIs: Gemini on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs a project with billing, those APIs enabled, and `gcloud auth application-default login`. No deployed services, queues, buckets or IAM.
+- Local development uses only model and redaction APIs from GCP: Gemini on Vertex AI (or the Gemini API with a key), and Sensitive Data Protection when testing `REDACTOR_BACKEND=dlp`. This needs `gcloud auth application-default login` as an account with access to `sideagent-hq`. Production is set up by Terraform and `infra/deploy.sh` (see `infra/terraform/README.md`).
 - Runner comparison: `pnpm compare:runners --trials 3 --runners reference,ollama:gemma4:26b-a4b,vertex:gemini-2.5-flash-lite,claude` runs the candidate demo jobs in `demo/jobs/code.ts` and prints a Markdown table (see "Field runner checks").
 - Laptop runner: install Ollama, `ollama pull gemma4:26b-a4b`, `pnpm sandbox:build`, then `pnpm field` with `SIDEAGENT_API_KEY` set to a runner key. For managed models, set `SIDEAGENT_MODEL_BACKEND=vertex` and `GOOGLE_CLOUD_PROJECT`; `field/test/sandbox.test.ts` checks the public-test sandbox (no network, no host environment, read-only workspace) and is skipped without Docker, except in CI.
 - Sandbox image: `pnpm sandbox:build` builds `sideagent-sandbox-python:dev` with the local Docker. HQ checks need it (`SANDBOX_MODE=docker`). `hq/test/python-sandbox.test.ts` rebuilds it (cached) and runs attack fixtures and the HQ Docker sandbox against it; it is skipped without Docker, except in CI. Other HQ tests use a fake sandbox, so they don't need Docker.
@@ -380,7 +380,7 @@ Rules:
 - Spend caps in three layers (D32): HQ limits (posts per owner per hour, posts per day, checks per job, mutants per job, house-runner tokens) and the `config/platform.paused` kill switch; GCP settings (HQ max 2 instances, jobs with no retries and a task timeout, Cloud Tasks with 5 attempts); a $10 budget whose `budget-guard` function pauses the platform at 100% and turns off billing at 200%.
 - Worst case per job with the caps is about $0.15 (house runner at its token cap on all 3 attempts, trap writer at its output cap, 6 checks), so about $6/day at 40 jobs. Observed: about $0.01–0.02 per job.
 - Budget set by Terraform. `terraform destroy` removes everything billable after judging; the Firestore database is abandoned, not deleted, and the KMS key ring stays (key rings can't be deleted; destroyed key versions cost nothing).
-- Check whether the hackathon provides GCP credits before Phase 7.
+- Whether the hackathon provides GCP credits is still unknown; the budget measures spend before credits, so the guard trips either way.
 
 ## Verified facts
 
@@ -399,6 +399,19 @@ From day-1 experiments on project `sideagent-hq` (`us-central1`, before D25 chos
 - **Sandbox network:** a Cloud Run Job on a /26 subnet with Direct VPC `all-traffic` egress, Private Google Access and no Cloud NAT mounted a bucket read-only (mount took about 2 s) and could not reach `https://example.com`. It **could** reach `storage.googleapis.com` (401 without a token) and the metadata server (200), so code in the sandbox can get a token for the job's service account. The sandbox service account must hold nothing beyond its two bucket roles. After the run, Cloud Run keeps a serverless IP on the subnet for a while, so the subnet can't be deleted straight away.
 - **Gemini CLI to `/mcp`:** Gemini CLI 0.64.0 with `httpUrl` and an `Authorization: Bearer <key>` header shows the local HQ as Connected in `gemini mcp list`, and as Disconnected with a wrong key.
 - **Gemini API fallback:** a project API key restricted to `generativelanguage.googleapis.com` authenticates, but calls return `402` "Your prepayment credits are depleted" until prepaid credits are added in AI Studio. `gemini-2.5-flash` is "no longer available to new users" on the Gemini API (it suggests `gemini-3.8-flash`), so the fallback needs a different model ID from Vertex.
+
+## Production checks
+
+First deploy to `sideagent-hq`, 2026-10-15 (`terraform apply`, then `infra/deploy.sh`):
+
+- **End to end:** a slugify job posted to `/v1/jobs` on live HQ was screened in 12 s (Gemini, Sensitive Data Protection, KMS), test-reviewed on the Cloud Run sandbox in 75 s (two executions, strength 80%), dispatched, claimed by the house runner 22 s later (Flash-Lite, 5 steps, 2,718 tokens, public tests in-process), checked 12/12 and released, about 2.5 minutes from post to release. The poster's balance went from 100 to 89 (budget 10, screening fee 1).
+- **Sandbox mounts:** the GCS FUSE mounts with folder markers worked, including writes to `/mnt/out` as uid 10001, and HQ read the outcome from the bucket with the execution status.
+- **Redaction gap found and fixed:** Sensitive Data Protection redacted the email but not "account 12345678", which the pattern redactor catches. The DLP redactor now adds the pattern redactor's findings.
+- **Kill switch:** a budget notification at 100% published to `billing-budget` reached the guard through the authenticated push, which paused the platform; a post 31 s later got `rate_limited` "Sideagent is paused". Cleared by hand afterwards. The 200% path (billing off) was not triggered live; it is covered by unit tests, and a live trigger would really turn billing off.
+- **Auth on the live routes:** `/v1` without a key 401, `/internal/steps` without an OIDC token 401, `budget-guard` without IAM 403.
+- **Not checked live:** the per-hour post limit (it would use 11 of the day's 40 posts and run 10 full pipelines; covered by `hq/test/limits.test.ts`).
+- **First apply:** the house-runner jobs can't be created until their secrets have a version, so the first `terraform apply` fails on them; `deploy.sh secrets` and a second apply fix it.
+- `/healthz` returns Google's 404 on Cloud Run, which reserves the path; use any `/v1` route to check HQ is up.
 
 ## Field runner checks
 

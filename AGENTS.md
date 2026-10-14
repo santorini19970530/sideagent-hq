@@ -42,7 +42,7 @@ These follow from the product's core promise. Treat violations as bugs.
 
 - TypeScript everywhere (pnpm workspace): `protocol/`, `hq/`, `field/`, `control/`. The only non-TypeScript code is the check script inside sandbox images.
 - `pnpm install`, then `pnpm typecheck`, `pnpm lint`, `pnpm test`. Run `pnpm schemas` after changing `protocol/` schemas and commit the JSON. Run typecheck and lint before committing.
-- Local first: every cloud dependency goes behind an adapter with a local default (see "Cloud adapters" in `docs/technical.md`). Don't call GCP services other than model APIs before Phase 7.
+- Local first: every cloud dependency goes behind an adapter with a local default (see "Cloud adapters" in `docs/technical.md`); tests never touch GCP, and local development calls only the model and redaction APIs. Production is deployed: infrastructure changes go through `infra/terraform/` (D33), code through `infra/deploy.sh`. Don't create GCP resources by hand or with gcloud outside those two.
 - No always-on cloud resources (minimum instances, Cloud NAT, VPC connectors, load balancers). Everything must scale to zero (D20).
 - Schemas live in `protocol/` (Zod) and are the single source for validation, MCP tools and Gemini output. Don't redefine types elsewhere.
 - Model IDs come from configuration, never hardcoded.

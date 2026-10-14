@@ -32,15 +32,22 @@ terraform apply
 ## First deploy
 
 1. Do the manual steps below that apply (Firebase link, Firestore import).
-2. `terraform apply`. Services and jobs start on the placeholder `cloudrun/container/hello` image.
-3. `infra/deploy.sh`. It builds the `hq`, `field` and `sandbox-python` images with Cloud Build, adds the house-runner key versions to Secret Manager once (from `pnpm --filter @sideagent/hq seed:house`), points the services and jobs at the real images (with the HQ and budget-guard commands), and runs `firebase deploy`.
-4. Later changes: `terraform apply` for infrastructure, `deploy.sh` for code. Terraform ignores image, command and gcloud client fields, so the two don't fight.
+2. `terraform apply`. Services and jobs start on the placeholder `cloudrun/container/hello` image. On a new project this fails on the two house-runner jobs, because their secrets have no version yet; everything else is created.
+3. `infra/deploy.sh secrets` to seed the house-runner keys, then `terraform apply` again for the two jobs.
+4. `infra/deploy.sh`. It builds the `hq`, `field` and `sandbox-python` images with Cloud Build, adds the house-runner key versions to Secret Manager once (from `pnpm --filter @sideagent/hq seed:house`), points the services and jobs at the real images (with the HQ and budget-guard commands), and runs `firebase deploy`.
+5. Later changes: `terraform apply` for infrastructure, `deploy.sh` for code. Terraform ignores image, command and gcloud client fields, so the two don't fight.
 
 ## Manual steps
 
 Terraform does not do these:
 
-- **Link Firebase** to the project if it isn't already (Firebase console, "Add project", pick `sideagent-hq`). This creates the default Hosting site `sideagent-hq.web.app`.
+- **Link Firebase** to the project if it isn't already, which creates the default Hosting site `sideagent-hq.web.app`. Done for `sideagent-hq` on 2026-10-15 through the API, and a web app ("Mission control") was registered; `deploy.sh control` needs its API key in `FIREBASE_WEB_API_KEY`:
+  ```sh
+  TOKEN=$(gcloud auth application-default print-access-token)
+  curl -X POST -H "authorization: Bearer $TOKEN" -H "x-goog-user-project: sideagent-hq" \
+    https://firebase.googleapis.com/v1beta1/projects/sideagent-hq:addFirebase
+  ```
+- **Firebase CLI login** as an account that can deploy to the project (`firebase login:add`, then `firebase login:use`), for `deploy.sh control`.
 - **Enable Google sign-in** in Firebase Authentication (console, Authentication, Sign-in method), and add the Hosting domain to the authorized domains if it is missing.
 - **Import an existing Firestore database.** If `(default)` already exists (for example created by the Firebase console), import it before the first apply:
   ```sh
