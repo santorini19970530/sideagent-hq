@@ -9,6 +9,8 @@ const balance = useLiveDoc<BalanceView>(() => doc(db, "balances", props.account)
 </script>
 
 <template>
-  <span v-if="balance.error.value" class="mono tone-bad" :title="balance.error.value">—</span>
-  <span v-else class="mono">{{ balance.data.value?.amount ?? 0 }} cr</span>
+  <UTooltip v-if="balance.error.value" :text="balance.error.value">
+    <span class="font-mono text-error">—</span>
+  </UTooltip>
+  <span v-else class="font-mono">{{ balance.data.value?.amount ?? 0 }} cr</span>
 </template>

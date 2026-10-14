@@ -1,163 +1,87 @@
 <script setup lang="ts">
+import type { NavigationMenuItem } from "@nuxt/ui";
 import { accounts } from "@sideagent/protocol";
 
 const { user, owner, ready, error, signIn, signOut, retry } = useOwner();
 const signInAction = useAction();
+
+const nav: NavigationMenuItem[] = [
+  { label: "Mission map", to: "/", icon: "i-lucide-workflow" },
+  { label: "Counterintelligence", to: "/feed", icon: "i-lucide-shield-alert" },
+  { label: "Ledger", to: "/ledger", icon: "i-lucide-landmark" },
+  { label: "Field agents", to: "/agents", icon: "i-lucide-key-round" },
+];
 </script>
 
 <template>
-  <div class="shell">
-    <header class="top">
-      <NuxtLink to="/" class="brand">
-        <span class="mark" aria-hidden="true" />
-        <span>Sideagent</span>
-        <span class="eyebrow">Mission control</span>
-      </NuxtLink>
-      <nav v-if="owner" class="nav">
-        <NuxtLink to="/">Mission map</NuxtLink>
-        <NuxtLink to="/feed">Counterintelligence</NuxtLink>
-        <NuxtLink to="/ledger">Ledger</NuxtLink>
-        <NuxtLink to="/agents">Field agents</NuxtLink>
-      </nav>
-      <div v-if="user" class="who">
-        <template v-if="owner">
-          <span class="muted">{{ owner.display_name }}</span>
-          <span class="credits"><BalanceCell :account="accounts.owner(owner.owner_id)" /></span>
+  <UApp>
+    <UHeader :toggle="!!owner" :ui="{ container: 'max-w-none' }">
+      <template #title>
+        <span class="flex items-center gap-2.5 font-bold">
+          <span
+            class="size-3.5 rounded-full border-2 border-primary ring-3 ring-primary/20"
+            aria-hidden="true"
+          />
+          Sideagent
+          <span class="eyebrow hidden sm:inline">Mission control</span>
+        </span>
+      </template>
+
+      <UNavigationMenu v-if="owner" :items="nav" />
+
+      <template #right>
+        <template v-if="user">
+          <template v-if="owner">
+            <span class="hidden text-sm text-muted sm:inline">{{ owner.display_name }}</span>
+            <span class="text-sm text-primary">
+              <BalanceCell :account="accounts.owner(owner.owner_id)" />
+            </span>
+          </template>
+          <UButton color="neutral" variant="outline" icon="i-lucide-log-out" @click="signOut">
+            Sign out
+          </UButton>
         </template>
-        <button @click="signOut">Sign out</button>
-      </div>
-    </header>
+      </template>
 
-    <main class="main">
-      <p v-if="!ready" class="muted">Establishing a secure line…</p>
-      <section v-else-if="!user" class="gate panel">
-        <p class="eyebrow">Eyes only</p>
-        <h1>Mission control</h1>
-        <p class="muted">
-          Watch your agents' missions move from briefing to dead drop, follow every credit, and
-          issue keys to your field agents.
-        </p>
-        <button
-          class="primary"
-          :disabled="signInAction.busy.value"
-          @click="signInAction.run(signIn)"
-        >
-          Sign in with Google
-        </button>
-        <p v-if="signInAction.failure.value" class="error">{{ signInAction.failure.value }}</p>
-      </section>
-      <div v-else-if="error" class="refused">
-        <p class="error">HQ refused the sign-in: {{ error }}</p>
-        <button @click="retry">Retry</button>
+      <template #body>
+        <UNavigationMenu v-if="owner" :items="nav" orientation="vertical" class="-mx-2.5" />
+      </template>
+    </UHeader>
+
+    <UMain class="p-4 sm:p-6">
+      <p v-if="!ready" class="text-muted">Establishing a secure line…</p>
+      <UPageCard
+        v-else-if="!user"
+        class="mx-auto mt-[12vh] max-w-md"
+        variant="subtle"
+        title="Mission control"
+        description="Watch your agents' missions move from briefing to dead drop, follow every credit, and issue keys to your field agents."
+        :ui="{ title: 'text-3xl', container: 'gap-y-4' }"
+      >
+        <template #leading>
+          <span class="eyebrow">Eyes only</span>
+        </template>
+        <template #footer>
+          <div class="grid justify-items-start gap-3">
+            <UButton
+              icon="i-simple-icons-google"
+              :loading="signInAction.busy.value"
+              @click="signInAction.run(signIn)"
+            >
+              Sign in with Google
+            </UButton>
+            <UAlert v-if="signInAction.failure.value" :description="signInAction.failure.value" />
+          </div>
+        </template>
+      </UPageCard>
+      <div v-else-if="error" class="grid max-w-2xl justify-items-start gap-3">
+        <UAlert :description="`HQ refused the sign-in: ${error}`" />
+        <UButton color="neutral" variant="outline" icon="i-lucide-rotate-cw" @click="retry">
+          Retry
+        </UButton>
       </div>
-      <p v-else-if="!owner" class="muted">Checking clearance…</p>
+      <p v-else-if="!owner" class="text-muted">Checking clearance…</p>
       <NuxtPage v-else />
-    </main>
-  </div>
+    </UMain>
+  </UApp>
 </template>
-
-<style scoped>
-.shell {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.top {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  flex-wrap: wrap;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.mark {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.nav {
-  display: flex;
-  gap: 4px;
-}
-
-.nav a {
-  text-decoration: none;
-  color: var(--muted);
-  padding: 6px 12px;
-  border-radius: 8px;
-}
-
-.nav a.router-link-exact-active {
-  color: var(--text);
-  background: var(--panel-raised);
-}
-
-.who {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.credits {
-  color: var(--accent);
-}
-
-.main {
-  flex: 1;
-  padding: 24px;
-  width: 100%;
-}
-
-.gate {
-  max-width: 460px;
-  margin: 12vh auto 0;
-  padding: 32px;
-  display: grid;
-  gap: 14px;
-  justify-items: start;
-}
-
-.gate h1 {
-  margin: 0;
-  font-size: 30px;
-}
-
-.gate p {
-  margin: 0;
-}
-
-.refused {
-  display: grid;
-  gap: 12px;
-  justify-items: start;
-  max-width: 640px;
-}
-
-@media (max-width: 640px) {
-  .top {
-    gap: 12px;
-    padding: 12px 16px;
-  }
-  .who {
-    margin-left: 0;
-  }
-  .main {
-    padding: 16px;
-  }
-}
-</style>

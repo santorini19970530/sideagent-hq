@@ -73,12 +73,14 @@ export const STATE_LABELS: Record<JobState, string> = {
   disputed: "Disputed",
 };
 
-/** Tone for state badges: drives the colour token. */
-export function toneOf(state: JobState): "neutral" | "active" | "good" | "bad" {
-  if (state === "passed" || state === "released") return "good";
-  if (state === "failed" || state === "rejected" || state === "expired") return "bad";
+/** Nuxt UI colour of a badge; `info` marks live activity and pulses. */
+export type Tone = "neutral" | "info" | "success" | "error";
+
+export function toneOf(state: JobState): Tone {
+  if (state === "passed" || state === "released") return "success";
+  if (state === "failed" || state === "rejected" || state === "expired") return "error";
   if (state === "open" || state === "draft") return "neutral";
-  return "active";
+  return "info";
 }
 
 export function formatTime(date: Date, withDate = false): string {

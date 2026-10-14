@@ -4,18 +4,12 @@ export function errorMessage(err: unknown): string {
 
 /** Runs one user action at a time, keeping its failure message for the page to show. */
 export function useAction() {
-  const busy = ref(false);
-  const failure = ref<string | null>(null);
-  async function run(fn: () => Promise<unknown>) {
-    busy.value = true;
-    failure.value = null;
-    try {
-      await fn();
-    } catch (err) {
-      failure.value = errorMessage(err);
-    } finally {
-      busy.value = false;
-    }
-  }
-  return { busy, failure, run };
+  const { isLoading, error, executeImmediate } = useAsyncState(
+    (fn: () => Promise<unknown>) => fn(),
+    null,
+    // The page shows the failure; don't also log it.
+    { immediate: false, onError: () => {} },
+  );
+  const failure = computed(() => (error.value == null ? null : errorMessage(error.value)));
+  return { busy: isLoading, failure, run: executeImmediate };
 }

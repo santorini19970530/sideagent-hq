@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Handle, Position, VueFlow, useVueFlow, type Edge, type Node } from "@vue-flow/core";
 
+useHead({ title: "Mission map" });
+
 const LANE_WIDTH = 240;
 const NODE_HEIGHT = 108;
 const TOP = 64;
@@ -35,7 +37,7 @@ const graph = computed(() => {
         id: `${runnerId}-${job.id}`,
         source: `runner-${runnerId}`,
         target: job.id,
-        animated: toneOf(job.state) === "active",
+        animated: toneOf(job.state) === "info",
       });
     }
   }
@@ -77,16 +79,19 @@ watch(
 </script>
 
 <template>
-  <div class="map-page">
-    <PageHeader eyebrow="Mission map · live" title="Every mission, from briefing to dead drop">
-      <template #aside>
-        <p class="muted">{{ jobs.length }} {{ jobs.length === 1 ? "mission" : "missions" }}</p>
+  <div class="grid gap-4">
+    <UPageHeader headline="Mission map · live" title="Every mission, from briefing to dead drop">
+      <template #links>
+        <p class="text-muted">{{ jobs.length }} {{ jobs.length === 1 ? "mission" : "missions" }}</p>
       </template>
-    </PageHeader>
-    <p v-if="error" class="error">{{ error }}</p>
+    </UPageHeader>
+    <UAlert v-if="error" :description="error" />
 
-    <div class="layout" :class="{ 'with-detail': selected }">
-      <div class="panel canvas">
+    <div class="grid gap-4" :class="{ 'lg:grid-cols-[minmax(0,1fr)_340px]': selected }">
+      <UCard
+        class="relative h-[60vh] min-h-115 overflow-hidden lg:h-[calc(100vh-190px)]"
+        :ui="{ body: 'h-full p-0 sm:p-0' }"
+      >
         <VueFlow
           :nodes="graph.nodes"
           :edges="graph.edges"
@@ -98,9 +103,11 @@ watch(
           fit-view-on-init
         >
           <template #node-lane="{ data }">
-            <div class="lane">
-              <span class="lane-title">{{ data.lane.title }}</span>
-              <span class="muted">{{ data.lane.hint }} · {{ data.count }}</span>
+            <div class="grid w-55 gap-0.5 border-b border-default pb-2 text-xs">
+              <span class="font-mono font-semibold tracking-[0.12em] uppercase">
+                {{ data.lane.title }}
+              </span>
+              <span class="text-muted">{{ data.lane.hint }} · {{ data.count }}</span>
             </div>
           </template>
           <template #node-job="{ data }">
@@ -109,92 +116,24 @@ watch(
           </template>
           <template #node-runner="{ data }">
             <Handle type="source" :position="Position.Top" :connectable="false" />
-            <div class="runner">
+            <div
+              class="grid gap-1 rounded-lg border border-dashed border-primary bg-default px-3 py-2"
+            >
               <span class="eyebrow">Field agent</span>
-              <span class="mono">{{ codename(data.runnerId) }}</span>
+              <span class="font-mono">{{ codename(data.runnerId) }}</span>
             </div>
           </template>
         </VueFlow>
-        <div v-if="!jobs.length" class="empty">
+        <div v-if="!jobs.length" class="absolute inset-x-6 bottom-6 grid max-w-md gap-1.5">
           <p class="eyebrow">No missions yet</p>
-          <p class="muted">
-            Issue a handler key under <NuxtLink to="/agents">Field agents</NuxtLink>, connect your
+          <p class="text-muted">
+            Issue a handler key under
+            <ULink to="/agents" class="text-default underline">Field agents</ULink>, connect your
             agent to HQ over MCP, and ask it to post a job. It appears here as soon as it is filed.
           </p>
         </div>
-      </div>
+      </UCard>
       <JobTimeline v-if="selected" :key="selected.id" :job="selected" />
     </div>
   </div>
 </template>
-
-<style scoped>
-.map-page {
-  display: grid;
-  gap: 16px;
-}
-
-.map-page > p {
-  margin: 0;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-.layout.with-detail {
-  grid-template-columns: minmax(0, 1fr) 340px;
-}
-
-.canvas {
-  height: calc(100vh - 190px);
-  min-height: 460px;
-  position: relative;
-  overflow: hidden;
-}
-
-.lane {
-  width: 220px;
-  display: grid;
-  gap: 2px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-}
-
-.lane-title {
-  font: 600 12px/1.2 var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.runner {
-  display: grid;
-  gap: 4px;
-  padding: 8px 12px;
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-
-.empty {
-  position: absolute;
-  inset: auto 24px 24px;
-  max-width: 460px;
-}
-
-.empty p {
-  margin: 0 0 6px;
-}
-
-@media (max-width: 960px) {
-  .layout.with-detail {
-    grid-template-columns: 1fr;
-  }
-  .canvas {
-    height: 60vh;
-  }
-}
-</style>

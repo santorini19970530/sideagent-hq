@@ -4,11 +4,26 @@ export default defineNuxtConfig({
   compatibilityDate: "2026-10-01",
   ssr: false,
   devtools: { enabled: false },
+  modules: ["@nuxt/ui", "@vueuse/nuxt"],
+  // Dark only, and no runtime calls to Google Fonts or the Iconify API: icons come from the
+  // bundled @iconify-json sets.
+  ui: { colorMode: false, fonts: false },
+  icon: {
+    provider: "none",
+    serverBundle: false,
+    // Icons Nuxt UI renders itself (header menu, modal close, loading button) aren't in our
+    // sources, so the scan can't find them.
+    clientBundle: {
+      scan: true,
+      icons: ["lucide:menu", "lucide:x", "lucide:loader-circle", "lucide:check"],
+    },
+  },
   css: ["~/assets/main.css", "@vue-flow/core/dist/style.css"],
   app: {
     head: {
-      title: "Sideagent · Mission control",
-      htmlAttrs: { lang: "en" },
+      title: "Mission control",
+      titleTemplate: "%s · Sideagent",
+      htmlAttrs: { lang: "en", class: "dark" },
       meta: [{ name: "viewport", content: "width=device-width, initial-scale=1" }],
     },
   },

@@ -2,77 +2,51 @@
 import type { FeedKind, FeedView } from "@sideagent/protocol";
 import { collection, limit, orderBy, query, type Timestamp } from "firebase/firestore";
 
+useHead({ title: "Counterintelligence" });
+
 const { db } = useNuxtApp().$firebase;
 // Public and sanitized by HQ: fixed text and counts, never job content (`FeedView`).
 const { data: entries, error } = useLiveQuery<FeedView<Timestamp>>(() =>
   query(collection(db, "feed"), orderBy("createdAt", "desc"), limit(50)),
 );
 
-const KINDS: Record<FeedKind, { label: string; tone: "good" | "bad" | "active" }> = {
-  job_blocked: { label: "Briefing blocked", tone: "bad" },
-  job_rejected: { label: "Briefing rejected", tone: "bad" },
-  redacted: { label: "Eyes only", tone: "active" },
-  result_blocked: { label: "Debrief held", tone: "bad" },
-  runner_burned: { label: "Burned", tone: "bad" },
+const KINDS: Record<FeedKind, { label: string; tone: Tone }> = {
+  job_blocked: { label: "Briefing blocked", tone: "error" },
+  job_rejected: { label: "Briefing rejected", tone: "error" },
+  redacted: { label: "Eyes only", tone: "info" },
+  result_blocked: { label: "Debrief held", tone: "error" },
+  runner_burned: { label: "Burned", tone: "error" },
 };
 </script>
 
 <template>
-  <div class="feed">
-    <PageHeader eyebrow="Counterintelligence · live" title="Station log">
-      Every briefing is screened before a field agent sees it, private data is swapped for
-      placeholders, and every debrief faces hidden tests and stings. What counterintelligence
-      caught, as it happens.
-    </PageHeader>
+  <div class="grid max-w-5xl gap-4">
+    <UPageHeader
+      headline="Counterintelligence · live"
+      title="Station log"
+      description="Every briefing is screened before a field agent sees it, private data is swapped for placeholders, and every debrief faces hidden tests and stings. What counterintelligence caught, as it happens."
+    />
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <ol class="panel entries">
-      <li v-for="entry in entries" :key="entry.id">
-        <span class="badge" :class="`tone-${KINDS[entry.kind].tone}`">
-          {{ KINDS[entry.kind].label }}
-        </span>
-        <span class="detail">{{ entry.detail }}</span>
-        <span class="mono muted">#{{ codename(entry.jobId) }}</span>
-        <span v-if="entry.agentId" class="mono muted">agent {{ codename(entry.agentId) }}</span>
-        <time class="muted">{{ formatTime(entry.createdAt.toDate()) }}</time>
-      </li>
-      <li v-if="!entries.length" class="muted">All quiet. Nothing caught yet.</li>
-    </ol>
+    <UAlert v-if="error" :description="error" />
+    <UCard :ui="{ body: 'p-0 sm:p-0' }">
+      <ol class="divide-y divide-default">
+        <li
+          v-for="entry in entries"
+          :key="entry.id"
+          class="flex flex-wrap items-baseline gap-2.5 px-4 py-2.5"
+        >
+          <StateBadge :tone="KINDS[entry.kind].tone" :label="KINDS[entry.kind].label" />
+          <span class="min-w-48 flex-1">{{ entry.detail }}</span>
+          <span class="font-mono text-sm text-muted">#{{ codename(entry.jobId) }}</span>
+          <span v-if="entry.agentId" class="font-mono text-sm text-muted">
+            agent {{ codename(entry.agentId) }}
+          </span>
+          <time class="text-sm text-muted">{{ formatTime(entry.createdAt.toDate()) }}</time>
+        </li>
+        <li v-if="!entries.length" class="px-4 py-2.5 text-muted">
+          All quiet. Nothing caught yet.
+        </li>
+      </ol>
+    </UCard>
   </div>
 </template>
-
-<style scoped>
-.feed {
-  display: grid;
-  gap: 16px;
-  max-width: 980px;
-}
-
-.feed > p {
-  margin: 0;
-}
-
-.entries {
-  list-style: none;
-  margin: 0;
-  padding: 6px 0;
-}
-
-.entries li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--line);
-}
-
-.entries li:last-child {
-  border-bottom: none;
-}
-
-.detail {
-  flex: 1;
-  min-width: 200px;
-}
-</style>

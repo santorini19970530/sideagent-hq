@@ -1,175 +1,65 @@
 /* Mission control: a dim operations room. One accent (signal amber) for live activity. */
-:root {
-  --bg: #0b0f14;
-  --panel: #121820;
-  --panel-raised: #18202a;
-  --line: #243040;
-  --text: #e3e8ee;
-  --muted: #8a97a8;
-  --accent: #f2b544;
-  --accent-ink: #1a1306;
-  --good: #4cc38a;
-  --bad: #ef6b6b;
-  --active: #6aa8ff;
-  --radius: 10px;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* 400 is the accent; dark mode uses it for `primary`. */
+  --color-signal-50: #fef8ec;
+  --color-signal-100: #fdeccb;
+  --color-signal-200: #fad793;
+  --color-signal-300: #f6c463;
+  --color-signal-400: #f2b544;
+  --color-signal-500: #e09a1f;
+  --color-signal-600: #c27914;
+  --color-signal-700: #9c5914;
+  --color-signal-800: #7f4717;
+  --color-signal-900: #6a3b17;
+  --color-signal-950: #3d1e08;
+
+  /* 950 page, 900 panel, 800 raised panel, 700 line, 400 muted text, 100 text. */
+  --color-ink-50: #f4f6f8;
+  --color-ink-100: #e3e8ee;
+  --color-ink-200: #c9d1db;
+  --color-ink-300: #a9b5c3;
+  --color-ink-400: #8a97a8;
+  --color-ink-500: #66758a;
+  --color-ink-600: #4a586b;
+  --color-ink-700: #243040;
+  --color-ink-800: #18202a;
+  --color-ink-900: #121820;
+  --color-ink-950: #0b0f14;
+}
+
+.dark {
   color-scheme: dark;
+  --ui-radius: 0.375rem;
+  --ui-bg: var(--ui-color-neutral-950);
+  --ui-bg-muted: var(--ui-color-neutral-900);
+  --ui-bg-elevated: var(--ui-color-neutral-800);
+  --ui-bg-accented: var(--ui-color-neutral-700);
+  --ui-border: var(--ui-color-neutral-700);
+  --ui-border-muted: var(--ui-color-neutral-800);
+  --ui-border-accented: var(--ui-color-neutral-600);
+  --ui-text: var(--ui-color-neutral-100);
+  --ui-text-toned: var(--ui-color-neutral-200);
+  --ui-text-muted: var(--ui-color-neutral-400);
+  --ui-text-dimmed: var(--ui-color-neutral-500);
+  --ui-text-inverted: var(--ui-color-neutral-950);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 15px/1.5 var(--sans);
-}
-
-a {
-  color: inherit;
-}
-
-button {
-  font: inherit;
-  cursor: pointer;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-  color: var(--text);
-  padding: 7px 14px;
-}
-
-button:hover:not(:disabled) {
-  border-color: var(--muted);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-
-button.danger {
-  color: var(--bad);
-}
-
-.eyebrow {
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.mono {
-  font-family: var(--mono);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid currentColor;
-  white-space: nowrap;
-}
-
-.badge::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.tone-neutral {
-  color: var(--muted);
-}
-.tone-active {
-  color: var(--active);
-}
-.tone-good {
-  color: var(--good);
-}
-.tone-bad {
-  color: var(--bad);
-}
-
-.tone-active.badge::before {
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.25;
+@layer base {
+  body {
+    @apply bg-default text-default antialiased;
   }
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-
-th {
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-td.num,
-th.num {
-  text-align: right;
-  font-family: var(--mono);
-}
-
-.error {
-  color: var(--bad);
-  border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
-  background: color-mix(in srgb, var(--bad) 8%, transparent);
-  border-radius: 8px;
-  padding: 10px 14px;
-}
-
-pre {
-  font: 13px/1.5 var(--mono);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  white-space: pre;
+@layer components {
+  .eyebrow {
+    @apply font-mono text-[11px] leading-none font-semibold tracking-[0.14em] text-muted uppercase;
+  }
 }
 
 /* Jobs slide between lanes when their state changes. */
@@ -183,6 +73,6 @@ pre {
 }
 
 .vue-flow__edge-path {
-  stroke: var(--accent);
+  stroke: var(--ui-primary);
   stroke-width: 1.5;
 }

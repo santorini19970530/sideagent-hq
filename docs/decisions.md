@@ -258,3 +258,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** The spend guard (D32) is a chain of linked resources (budget, topic, push subscription, function, IAM on each), which a shell script can't re-run safely or remove reliably. `terraform plan` shows exactly what is billable before anything is created, and `destroy` is a teardown that can't forget a resource. Images change on every deploy and infrastructure rarely, so they stay separate.
 
 **Trade-off:** Two tools instead of one. Some setup stays manual and is listed in `infra/terraform/README.md` (Google sign-in in Firebase Auth, importing a Firestore database that already exists). Local state means one person applies; a GCS backend is a small change if both need to.
+
+## D34. Mission control uses Nuxt UI and VueUse (2026-10-15)
+
+**Decision:** Mission control's components come from Nuxt UI v4 (`UHeader`, `UPageHeader`, `UTable`, `UTimeline`, `UModal` through `useOverlay`, `UBadge`, `UAlert`, `UButton`), styled with Tailwind CSS v4 utilities instead of hand-written CSS. The old dark theme becomes two palettes and `--ui-*` overrides, and the app is dark only (`colorMode: false`). Composables come from VueUse and Nuxt where they fit: `createGlobalState` for the sign-in state, `useAsyncState` behind `useAction`, `useClipboard` for copying keys, `useSorted`, `useHead` for page titles and `$fetch` for HQ calls. The Firestore listener helper (`live()` behind `useLiveQuery` and `useLiveDoc`) stays hand-written.
+
+**Why:** Ready-made components give accessible tables, modals, tabs, tooltips and a mobile menu with less code to maintain, and make the dashboard look finished for the demo. `@vueuse/firebase`'s `useFirestore` was the alternative to `live()`, but it has no error state and resubscribes when a query is rebuilt with the same value, which would make the mission log flash on every job update.
+
+**Trade-off:** A bigger client bundle (Nuxt UI, Reka UI, TanStack Table) and Tailwind's preflight, which the Vue Flow canvas has to live with. Icons are bundled on the client and not fetched, so an icon name that the build's scan can't see (one built at runtime) needs adding to `icon.clientBundle.icons` in `nuxt.config.ts`.

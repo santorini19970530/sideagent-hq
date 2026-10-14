@@ -11,10 +11,16 @@
     "test": "echo 'mission control has no unit tests; Firestore rules are tested in hq'"
   },
   "dependencies": {
+    "@iconify-json/lucide": "^1.2.138",
+    "@iconify-json/simple-icons": "^1.2.100",
+    "@nuxt/ui": "^4.11.3",
     "@sideagent/protocol": "workspace:*",
     "@vue-flow/core": "^1.48.2",
+    "@vueuse/core": "^15.0.0",
+    "@vueuse/nuxt": "^15.0.0",
     "firebase": "^13.0.0",
     "nuxt": "^4.6.1",
+    "tailwindcss": "^4.3.3",
     "vue": "^3.5.43",
     "zod": "^4.6.6"
   },
