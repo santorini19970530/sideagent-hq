@@ -1,9 +1,11 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { apiError } from "@sideagent/protocol";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Adapters } from "./adapters/index.ts";
 import { jobRoutes } from "./api/jobs.ts";
-import { requireAgent, type AuthEnv } from "./auth.ts";
+import { ownerRoutes } from "./api/owner.ts";
+import { requireAgent, requireOwner, type AuthEnv } from "./auth.ts";
 import type { Config } from "./config.ts";
 import { HqError } from "./errors.ts";
 import { createJobService } from "./jobs/service.ts";
@@ -19,6 +21,12 @@ export function createApp(config: Config, adapters: Adapters, { now }: AppOption
   const app = new Hono<AuthEnv>();
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // Mission control, signed in with Firebase. Registered first: these routes answer before the
+  // API-key middleware below runs.
+  app.use("/v1/owner/*", cors({ origin: config.CONTROL_ORIGIN }));
+  app.use("/v1/owner/*", requireOwner(adapters.auth));
+  app.route("/v1/owner", ownerRoutes(adapters.db, config));
 
   app.use("/v1/*", requireAgent(adapters.db));
   app.route("/v1", jobRoutes(jobs));

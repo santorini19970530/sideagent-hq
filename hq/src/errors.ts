@@ -35,3 +35,11 @@ export function parseInput<T extends z.ZodType>(schema: T, input: unknown): z.ou
     .join("; ");
   throw new HqError("invalid_request", "Request failed validation", `Fix these fields: ${issues}`);
 }
+
+export async function readJson(req: Request): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    throw new HqError("invalid_request", "Body is not valid JSON", "Send a JSON object body");
+  }
+}

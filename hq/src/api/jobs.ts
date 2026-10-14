@@ -2,7 +2,7 @@ import { JobType, PostJobInput, SubmitResultInput } from "@sideagent/protocol";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../auth.ts";
-import { HqError, parseInput } from "../errors.ts";
+import { parseInput, readJson } from "../errors.ts";
 import type { JobService } from "../jobs/service.ts";
 
 const MAX_WAIT_SECONDS = 30;
@@ -31,14 +31,6 @@ const NextQuery = z.object({
 });
 
 const ClaimQuery = z.object({ same_owner: sameOwnerFlag });
-
-async function readJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json();
-  } catch {
-    throw new HqError("invalid_request", "Body is not valid JSON", "Send a JSON object body");
-  }
-}
 
 /** `/v1` REST routes. Same service calls as the MCP tools. */
 export function jobRoutes(jobs: JobService) {

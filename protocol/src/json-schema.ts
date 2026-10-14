@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ApiError } from "./errors.ts";
 import { JobSpec, JobState, JobType } from "./job.ts";
+import { CreateAgentInput, CreateAgentOutput, OwnerOutput, RevokeAgentOutput } from "./owner.ts";
 import { LastCheck, Submission, TestSummary } from "./result.ts";
 import {
   BalanceOutput,
@@ -27,6 +28,10 @@ const schemas = {
   JobStatus,
   LastCheck,
   BalanceOutput,
+  OwnerOutput,
+  CreateAgentInput,
+  CreateAgentOutput,
+  RevokeAgentOutput,
 };
 
 /** JSON Schema for each public schema, keyed by file name (without .json). */

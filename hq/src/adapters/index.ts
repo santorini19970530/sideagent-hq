@@ -1,3 +1,4 @@
+import type { Auth } from "firebase-admin/auth";
 import type { Firestore } from "firebase-admin/firestore";
 import type { Config } from "../config.ts";
 import { createCheckStep } from "../pipeline/check.ts";
@@ -5,7 +6,7 @@ import { createDispatchStep } from "../pipeline/dispatch.ts";
 import { createReleaseStep } from "../pipeline/release.ts";
 import { createDockerSandbox } from "../sandbox/docker.ts";
 import type { Sandbox } from "../sandbox/types.ts";
-import { createFirestore } from "../store/firestore.ts";
+import { createAuth, createFirestore } from "../store/firestore.ts";
 import { createLocalBlobStore } from "./blob/local.ts";
 import type { BlobStore } from "./blob/types.ts";
 import { createLocalDispatcher } from "./dispatch/local.ts";
@@ -15,6 +16,8 @@ import type { PipelineRunner } from "./pipeline/types.ts";
 
 export interface Adapters {
   db: Firestore;
+  /** Null without the Auth emulator; see `createAuth`. */
+  auth: Auth | null;
   blobs: BlobStore;
   pipeline: PipelineRunner;
   sandbox: Sandbox;
@@ -69,5 +72,5 @@ export function createAdapters(
     release: createReleaseStep(db),
   });
 
-  return { db, blobs, pipeline, sandbox };
+  return { db, auth: createAuth(config), blobs, pipeline, sandbox };
 }

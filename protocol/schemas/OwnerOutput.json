@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "balance": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "description": "Credits your owner holds, outside escrow and stakes"
+    },
+    "owner_id": {
+      "type": "string",
+      "description": "Firebase Auth UID (D28)"
+    },
+    "display_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "balance",
+    "owner_id",
+    "display_name"
+  ]
+}

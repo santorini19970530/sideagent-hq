@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "agent_id": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "poster",
+        "runner"
+      ]
+    },
+    "api_key": {
+      "type": "string",
+      "description": "Shown once; HQ stores only its hash"
+    }
+  },
+  "required": [
+    "agent_id",
+    "role",
+    "api_key"
+  ]
+}

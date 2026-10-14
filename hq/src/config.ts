@@ -16,6 +16,10 @@ const Config = z.object({
   GCP_PROJECT: z.string().default("demo-sideagent"),
   // Set by `firebase emulators:exec`; the `dev` script points it at `pnpm emulators`.
   FIRESTORE_EMULATOR_HOST: z.string().optional(),
+  // Same for the Auth emulator, which issues mission control's sign-in tokens.
+  FIREBASE_AUTH_EMULATOR_HOST: z.string().optional(),
+  // Mission control's origin, allowed by CORS on the owner API.
+  CONTROL_ORIGIN: z.string().default("http://localhost:3000"),
   CLAIM_TTL_SECONDS: z.coerce.number().int().positive().default(1800),
   CLAIM_ATTEMPTS: z.coerce.number().int().positive().default(3),
   // Credit amounts (D24).

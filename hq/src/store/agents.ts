@@ -38,3 +38,16 @@ export async function findAgentByApiKey(db: Firestore, apiKey: string): Promise<
   if (!doc || (doc.get("status") as AgentStatus) !== "active") return null;
   return { id: doc.id, ownerId: doc.get("ownerId"), role: doc.get("role") };
 }
+
+/** Revokes one of the owner's agents; its key stops working at once. False if not theirs. */
+export async function revokeAgent(db: Firestore, ownerId: string, agentId: string) {
+  const ref = db.collection("agents").doc(agentId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.get("ownerId") !== ownerId) return false;
+    if (snap.get("status") === "revoked") return true;
+    const status: AgentStatus = "revoked";
+    tx.update(ref, { status, revokedAt: FieldValue.serverTimestamp() });
+    return true;
+  });
+}

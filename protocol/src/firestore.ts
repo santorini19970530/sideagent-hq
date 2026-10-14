@@ -1,4 +1,5 @@
 import type { CodeFile, JobState, JobType, Runtime } from "./job.ts";
+import type { AgentRole } from "./owner.ts";
 import type { CheckOutcome, TestSummary } from "./result.ts";
 
 // Firestore documents that mission control reads directly, behind the read-only rules in
@@ -69,7 +70,6 @@ export interface JobEventView<T extends TimestampLike = TimestampLike> {
   createdAt: T;
 }
 
-export type AgentRole = "poster" | "runner";
 export type AgentStatus = "active" | "revoked";
 
 /** `agents/{agentId}`; HQ also stores the API key's hash. */

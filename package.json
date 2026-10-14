@@ -9,8 +9,8 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && prettier --check .",
-    "test": "firebase emulators:exec --config infra/firebase.json --project demo-sideagent --only firestore 'pnpm -r test'",
-    "emulators": "firebase emulators:start --config infra/firebase.json --project demo-sideagent --only firestore",
+    "test": "firebase emulators:exec --config infra/firebase.json --project demo-sideagent --only firestore,auth 'pnpm -r test'",
+    "emulators": "firebase emulators:start --config infra/firebase.json --project demo-sideagent --only firestore,auth",
     "demo:runner": "tsx demo/claim-and-submit.ts",
     "demo:escrow": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx demo/escrow.ts",
     "field": "tsx field/src/cli.ts field",
