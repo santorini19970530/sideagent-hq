@@ -15,3 +15,4 @@ dist/
 !*.tfvars.example
 control/dist
 infra/.hosting/
+infra/.firebase/
