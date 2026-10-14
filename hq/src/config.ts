@@ -6,7 +6,7 @@ const Config = z.object({
   BLOB_BACKEND: z.enum(["local", "gcs"]).default("local"),
   BLOB_LOCAL_DIR: z.string().default(".data/blobs"),
   PIPELINE_MODE: z.enum(["inline", "cloud-tasks"]).default("inline"),
-  SANDBOX_MODE: z.enum(["docker", "cloud-run-job"]).default("docker"),
+  SANDBOX_MODE: z.enum(["local", "docker", "cloud-run-job"]).default("local"),
   GCP_PROJECT: z.string().default("demo-sideagent"),
   // Set by `firebase emulators:exec`; the `dev` script points it at `pnpm emulators`.
   FIRESTORE_EMULATOR_HOST: z.string().optional(),

@@ -98,10 +98,13 @@ describe("claim and submit", () => {
     expect(submit.status).toBe(200);
     expect(submit.body).toMatchObject({ state: "submitted", attempts_left: 2 });
 
-    await vi.waitFor(async () => {
-      const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
-      expect(status.body.state).toBe("released");
-    });
+    await vi.waitFor(
+      async () => {
+        const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
+        expect(status.body.state).toBe("released");
+      },
+      { timeout: 15_000 },
+    );
     const poster = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     expect(poster.result?.[0]?.content).toContain("return a + b");
     expect(poster.events.map((e) => e.to)).toEqual([
@@ -122,6 +125,28 @@ describe("claim and submit", () => {
     );
     expect(observer.role).toBe("observer");
     expect(observer.claim).toBeUndefined();
+  });
+
+  it("does not release a wrong answer", async () => {
+    const { keys, jobId } = await postedJob();
+    await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`);
+    const submit = await h.call(keys.runner, "POST", `/v1/jobs/${jobId}/submissions`, {
+      result: [{ path: "solution.py", content: "def add(a, b):\n    return None\n" }],
+      idempotency_key: "wrong",
+    });
+    expect(submit.status).toBe(200);
+
+    await vi.waitFor(
+      async () => {
+        const status = await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`);
+        expect(status.body.state).toBe("failed");
+      },
+      { timeout: 15_000 },
+    );
+    const poster = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
+    expect(poster.result).toBeUndefined();
+    expect(poster.events.map((e) => e.to)).toContain("failed");
+    expect(poster.events.map((e) => e.to)).not.toContain("released");
   });
 
   it("never shows hidden tests or the reference solution to runners", async () => {

@@ -53,7 +53,10 @@ export function createHarness() {
         { path: "test_public.py", content: "from solution import add\nassert add(1, 2) == 3\n" },
       ],
       hidden_tests: [
-        { path: "test_hidden.py", content: "# HIDDEN_MARKER\nassert add(2, 2) == 4\n" },
+        {
+          path: "test_hidden.py",
+          content: "# HIDDEN_MARKER\nfrom solution import add\nassert add(2, 2) == 4\n",
+        },
       ],
       reference_solution: [{ path: "solution.py", content: "# REFERENCE_MARKER\n" }],
       budget: 10,

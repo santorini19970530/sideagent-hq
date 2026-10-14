@@ -3,6 +3,7 @@ import type { Config } from "../config.ts";
 import { createCheckStep } from "../pipeline/check.ts";
 import { createReleaseStep } from "../pipeline/release.ts";
 import { createDockerSandbox } from "../sandbox/docker.ts";
+import { createPythonSandbox } from "../sandbox/python.ts";
 import type { Sandbox } from "../sandbox/types.ts";
 import { createFirestore } from "../store/firestore.ts";
 import { createLocalBlobStore } from "./blob/local.ts";
@@ -24,19 +25,18 @@ function notYet(name: string, mode: string): never {
 export function createAdapters(config: Config): Adapters {
   if (config.BLOB_BACKEND !== "local") notYet("BLOB_BACKEND", config.BLOB_BACKEND);
   if (config.PIPELINE_MODE !== "inline") notYet("PIPELINE_MODE", config.PIPELINE_MODE);
-  if (config.SANDBOX_MODE !== "docker") notYet("SANDBOX_MODE", config.SANDBOX_MODE);
+  if (config.SANDBOX_MODE === "cloud-run-job") notYet("SANDBOX_MODE", config.SANDBOX_MODE);
 
   const db = createFirestore(config);
+  const blobs = createLocalBlobStore(config.BLOB_LOCAL_DIR);
+  const sandbox = config.SANDBOX_MODE === "docker" ? createDockerSandbox() : createPythonSandbox();
   // Step handlers are registered as each phase adds them.
   const pipeline: PipelineRunner = createInlinePipeline({
-    check: createCheckStep(db, { enqueue: (step, payload) => pipeline.enqueue(step, payload) }),
+    check: createCheckStep(db, blobs, sandbox, {
+      enqueue: (step, payload) => pipeline.enqueue(step, payload),
+    }),
     release: createReleaseStep(db),
   });
 
-  return {
-    db,
-    blobs: createLocalBlobStore(config.BLOB_LOCAL_DIR),
-    pipeline,
-    sandbox: createDockerSandbox(),
-  };
+  return { db, blobs, pipeline, sandbox };
 }
