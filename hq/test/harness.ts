@@ -2,7 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { JobSpec } from "@sideagent/protocol";
+import {
+  JobStatus,
+  type JobSpec,
+  type ScreeningVerdict,
+  type TrapTestDrafts,
+} from "@sideagent/protocol";
+import { expect, vi } from "vitest";
+import type { GenerateJson, JsonAnswer, PlatformModel } from "../src/agents/model.ts";
 import type { HouseRunnerDispatcher } from "../src/adapters/dispatch/types.ts";
 import { createAdapters } from "../src/adapters/index.ts";
 import { createApp } from "../src/app.ts";
@@ -13,31 +20,89 @@ import { createOwner } from "../src/store/owners.ts";
 
 export const SOLUTION = "def add(a, b):\n    return a + b\n";
 export const WRONG = "def add(a, b):\n    return None\n";
+/** A double agent's answer: fitted to the public example, wrong anywhere else. */
+export const CHEAT = "def add(a, b):\n    return {(1, 2): 3}.get((a, b))  # LOOKUP\n";
 
 /**
- * Stands in for Docker in pipeline tests: a result passes when it contains SOLUTION's body.
- * Set `next` to make the following check return or throw something else.
+ * Stands in for Docker in pipeline tests. A result passes a category's one test when it holds
+ * SOLUTION's body; CHEAT passes only `public`. Set `next` to make the following check return or
+ * throw something else. `bundles` records every check, review runs included.
  */
 export function createFakeSandbox() {
   const fake = {
     next: null as (() => Promise<CheckOutcome>) | null,
+    bundles: [] as Parameters<Sandbox["runChecks"]>[0][],
     runChecks: async (bundle: Parameters<Sandbox["runChecks"]>[0]): Promise<CheckOutcome> => {
+      fake.bundles.push(bundle);
       const override = fake.next;
       fake.next = null;
       if (override) return override();
       const ok = bundle.result.some((f) => f.content.includes("return a + b"));
-      const passed = ok ? 1 : 0;
+      const cheat = bundle.result.some((f) => f.content.includes("LOOKUP"));
+      const categories = Object.fromEntries(
+        Object.entries(bundle.tests)
+          .filter(([, files]) => files.length)
+          .map(([name, files]) => {
+            const failing = files.some((f) => f.content.includes("FAILS_REFERENCE"));
+            const pass = !failing && (ok || (cheat && name === "public"));
+            return [name, { passed: pass ? 1 : 0, total: 1 }];
+          }),
+      );
+      const counts = Object.values(categories);
       return {
         kind: "scored",
         summary: {
-          passed: passed * 2,
-          total: 2,
-          categories: { hidden: { passed, total: 1 }, public: { passed, total: 1 } },
+          passed: counts.reduce((n, c) => n + c.passed, 0),
+          total: counts.length,
+          categories,
         },
       };
     },
   };
   return fake;
+}
+
+const ALLOW: ScreeningVerdict = {
+  verdict: "allow",
+  categories: [],
+  confidence: 0.99,
+  reason: "Ordinary task",
+  fix_hint: "",
+};
+
+/**
+ * Stands in for Gemini. Screeners allow and the trap writer drafts one passing trap check,
+ * unless a test sets an answer for that agent in `answers` (used once) or `byAgent` (kept).
+ */
+type FakeAnswer = { value: unknown; confidence?: number | null };
+
+export function createFakeModel() {
+  const calls: GenerateJson<unknown>[] = [];
+  const answers: Record<string, FakeAnswer | Error> = {};
+  const byAgent: Record<string, FakeAnswer> = {};
+  async function generateJson<T>(req: GenerateJson<T>): Promise<JsonAnswer<T>> {
+    calls.push(req as GenerateJson<unknown>);
+    const once = answers[req.agent];
+    delete answers[req.agent];
+    if (once instanceof Error) throw once;
+    const answer = once ?? byAgent[req.agent] ?? { value: defaultAnswer(req.agent) };
+    return { value: req.schema.parse(answer.value), confidence: answer.confidence ?? null };
+  }
+  const model: PlatformModel = { generateJson };
+  return { ...model, calls, answers, byAgent };
+}
+
+function defaultAnswer(agent: string): unknown {
+  if (agent !== "trap-writer") return ALLOW;
+  const drafts: TrapTestDrafts = {
+    tests: [
+      {
+        name: "add_more",
+        content: "from solution import add\n\ndef test_more():\n    assert add(5, 7) == 12\n",
+      },
+    ],
+  };
+  return drafts;
 }
 
 // Runs against the Firestore emulator started by `pnpm test`. Every test creates its own
@@ -46,12 +111,15 @@ export function createFakeSandbox() {
 export function createHarness({
   dispatcher = null,
 }: { dispatcher?: HouseRunnerDispatcher | null } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "sideagent-blobs-"));
   const config = {
     ...loadConfig(process.env),
-    BLOB_LOCAL_DIR: mkdtempSync(join(tmpdir(), "sideagent-blobs-")),
+    BLOB_LOCAL_DIR: dir,
+    VAULT_LOCAL_KEY_FILE: join(dir, "vault.key"),
   };
   const sandbox = createFakeSandbox();
-  const adapters = createAdapters(config, { sandbox, dispatcher });
+  const model = createFakeModel();
+  const adapters = createAdapters(config, { sandbox, dispatcher, model });
   const clock = { now: new Date() };
   const app = createApp(config, adapters, { now: () => clock.now });
 
@@ -104,7 +172,7 @@ export function createHarness({
             "# HIDDEN_MARKER\nfrom solution import add\n\ndef test_add():\n    assert add(2, 2) == 4\n",
         },
       ],
-      reference_solution: [{ path: "solution.py", content: "# REFERENCE_MARKER\n" }],
+      reference_solution: [{ path: "solution.py", content: `# REFERENCE_MARKER\n${SOLUTION}` }],
       budget: 10,
       deadline: new Date(clock.now.getTime() + 24 * 3600_000).toISOString(),
       idempotency_key: randomUUID(),
@@ -112,5 +180,18 @@ export function createHarness({
     };
   }
 
-  return { config, adapters, sandbox, app, clock, call, agents, jobSpec };
+  /** Posts a job and waits until screening and test review let it open (or reject it). */
+  async function post(apiKey: string, spec: JobSpec = jobSpec()) {
+    const res = await call(apiKey, "POST", "/v1/jobs", spec);
+    if (res.status !== 200) return { res, jobId: null, status: null };
+    const jobId = res.body.job_id as string;
+    let status: JobStatus | undefined;
+    await vi.waitFor(async () => {
+      status = JobStatus.parse((await call(apiKey, "GET", `/v1/jobs/${jobId}`)).body);
+      expect(["draft", "screening", "test_review"]).not.toContain(status.state);
+    });
+    return { res, jobId, status: status! };
+  }
+
+  return { config, adapters, sandbox, model, app, clock, call, agents, jobSpec, post };
 }

@@ -4,7 +4,7 @@ import { createAgent } from "../src/store/agents.ts";
 import { createOwner } from "../src/store/owners.ts";
 
 // Creates one owner with starting credits, a poster and a runner agent, plus the house runner's
-// owner and agent, and prints their keys once.
+// and the demo double agent's owners and agents, and prints their keys once.
 const config = loadConfig();
 const { db } = createAdapters(config);
 const hq = `http://localhost:${config.PORT}`;
@@ -14,6 +14,8 @@ const poster = await createAgent(db, ownerId, "poster");
 const runner = await createAgent(db, ownerId, "runner");
 const houseOwnerId = await createOwner(db, "House runners", config.STARTING_CREDITS);
 const house = await createAgent(db, houseOwnerId, "runner");
+const doubleOwnerId = await createOwner(db, "Double agents", config.STARTING_CREDITS);
+const double = await createAgent(db, doubleOwnerId, "runner");
 
 console.log(`Owner ${ownerId} (${config.STARTING_CREDITS} credits)
 Poster agent ${poster.agent.id}: ${poster.apiKey}
@@ -37,4 +39,7 @@ Runner script:
 SIDEAGENT_HQ_URL=${hq} SIDEAGENT_API_KEY=${runner.apiKey} pnpm demo:runner
 
 House runner (restart HQ with these to dispatch one per new job):
-HOUSE_RUNNERS=local HOUSE_RUNNER_API_KEY=${house.apiKey}`);
+HOUSE_RUNNERS=local HOUSE_RUNNER_API_KEY=${house.apiKey}
+
+Double agent (add these to dispatch it instead; one trap failure burns its key, so seed again):
+HOUSE_RUNNER_DOUBLE_AGENT=1 HOUSE_RUNNER_DOUBLE_AGENT_API_KEY=${double.apiKey}`);

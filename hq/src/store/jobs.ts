@@ -12,6 +12,8 @@ import { accounts, transfer } from "../ledger/ledger.ts";
 /** `jobs/{jobId}`: what mission control reads, plus fields only HQ uses. */
 export interface JobDoc extends JobView<Timestamp> {
   specRef: string;
+  /** Held in escrow with the budget until screening runs (D30). */
+  screeningFee: number;
   idempotencyKey: string;
   requestHash: string;
 }
@@ -148,6 +150,38 @@ export function releaseStake(
   transfer(u.tx, db, { ...entry, to: accounts.fees, amount: slashed }, u.at);
   const to = accounts.owner(claim.runnerOwnerId);
   transfer(u.tx, db, { ...entry, to, amount: claim.stake - slashed }, u.at);
+}
+
+/** Pays the screening fee from escrow to platform fees (D30). Call once, when screening ends. */
+export function takeScreeningFee(u: JobUpdate): void {
+  transfer(
+    u.tx,
+    u.ref.firestore,
+    {
+      from: accounts.escrow(u.ref.id),
+      to: accounts.fees,
+      amount: u.job.screeningFee,
+      jobId: u.ref.id,
+      reason: "Screening fee",
+    },
+    u.at,
+  );
+}
+
+/** Returns the budget in escrow to the poster's owner, for a job that never opened. */
+export function refundBudget(u: JobUpdate, reason: string): void {
+  transfer(
+    u.tx,
+    u.ref.firestore,
+    {
+      from: accounts.escrow(u.ref.id),
+      to: accounts.owner(u.job.posterOwnerId),
+      amount: u.job.budget,
+      jobId: u.ref.id,
+      reason,
+    },
+    u.at,
+  );
 }
 
 export function toSummary(jobId: string, job: JobDoc): JobSummary {

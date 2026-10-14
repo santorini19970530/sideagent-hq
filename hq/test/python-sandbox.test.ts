@@ -247,9 +247,10 @@ describe.skipIf(!hasDocker)("python sandbox image", () => {
       checkId: "check",
       runtime: "python" as const,
       result: [{ path: "solution.py", content: result }],
-      publicTests: [{ path: "test_public.py", content: TESTS["tests/public/test_public.py"]! }],
-      hiddenTests: [{ path: "test_hidden.py", content: hidden }],
-      trapTests: [],
+      tests: {
+        public: [{ path: "test_public.py", content: TESTS["tests/public/test_public.py"]! }],
+        hidden: [{ path: "test_hidden.py", content: hidden }],
+      },
     });
 
     it("scores a correct and a wrong result", async () => {

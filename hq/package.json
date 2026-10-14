@@ -7,10 +7,12 @@
     "dev": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} FIREBASE_AUTH_EMULATOR_HOST=${FIREBASE_AUTH_EMULATOR_HOST:-127.0.0.1:9099} tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "seed": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx scripts/seed.ts",
+    "eval:screening": "tsx scripts/eval-screening.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@google/genai": "^2.29.1",
     "@hono/node-server": "^2.1.4",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@sideagent/protocol": "workspace:*",

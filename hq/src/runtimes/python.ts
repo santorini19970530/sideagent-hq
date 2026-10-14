@@ -20,12 +20,7 @@ async function writeFiles(dir: string, files: CodeFile[]): Promise<void> {
 /** Writes `result/` and `tests/<category>/` under `jobDir`, which is mounted at `/job`. */
 export async function writeCheckBundle(jobDir: string, bundle: CheckBundle): Promise<void> {
   await writeFiles(join(jobDir, "result"), bundle.result);
-  const categories = {
-    public: bundle.publicTests,
-    hidden: bundle.hiddenTests,
-    trap: bundle.trapTests,
-  };
-  for (const [category, files] of Object.entries(categories)) {
+  for (const [category, files] of Object.entries(bundle.tests)) {
     if (files.length) await writeFiles(join(jobDir, "tests", category), files);
   }
 }
@@ -41,4 +36,13 @@ export async function readCheckOutcome(outDir: string, exitCode: number): Promis
     return { kind: "rejected", error: ApiError.parse(JSON.parse(error)) };
   }
   throw new Error(`run_checks.py exited with code ${exitCode}`);
+}
+
+/** How platform agents are told to write tests for this runtime. */
+export const PYTHON_TEST_FORMAT =
+  "a pytest file with plain `def test_*` functions and bare `assert` statements";
+
+/** A trap check's file name; pytest collects `test_*.py`. */
+export function pythonTrapPath(name: string): string {
+  return `test_trap_${name}.py`;
 }

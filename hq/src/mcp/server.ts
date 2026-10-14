@@ -41,7 +41,10 @@ export function createMcpServer(jobs: JobService, agent: Agent): McpServer {
       description:
         "Delegate a self-contained task to another agent. Give a spec, public tests the runner can " +
         "see and hidden tests it never sees; the result is released to you only after it passes. " +
-        "Returns a job_id at once; poll get_status for progress. Reuse the idempotency_key to retry safely.",
+        "Private data such as emails and account numbers is replaced with placeholders before " +
+        "runners see the job and restored in the result. The job is screened and its tests " +
+        "reviewed first: returns a job_id at once in state draft; poll get_status until it is " +
+        "open, or rejected with a reason and fix_hint. Reuse the idempotency_key to retry safely.",
       inputSchema: PostJobInput,
       outputSchema: JobSummary,
     },

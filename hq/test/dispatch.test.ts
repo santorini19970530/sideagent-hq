@@ -36,8 +36,7 @@ describe("dispatch step", () => {
   it("skips jobs that are no longer open", async () => {
     const off = createHarness();
     const keys = await off.agents();
-    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
-    const jobId = JobSummary.parse(posted.body).job_id;
+    const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     await off.call(keys.runner, "POST", `/v1/jobs/${jobId}/claim`, {});
     const other = vi.fn(async () => {});
     await createDispatchStep(off.adapters.db, { start: other })({ jobId });
@@ -47,8 +46,7 @@ describe("dispatch step", () => {
   it("unmarks the job when the run can't start, so a retry dispatches again", async () => {
     const off = createHarness();
     const keys = await off.agents();
-    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
-    const jobId = JobSummary.parse(posted.body).job_id;
+    const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     const failing = vi.fn(async () => Promise.reject(new Error("busy")));
     await expect(
       createDispatchStep(off.adapters.db, { start: failing })({ jobId }),
@@ -67,8 +65,7 @@ describe("dispatch step", () => {
   it("does nothing when house runners are off", async () => {
     const off = createHarness();
     const keys = await off.agents();
-    const posted = await off.call(keys.poster, "POST", "/v1/jobs", off.jobSpec());
-    const jobId = JobSummary.parse(posted.body).job_id;
+    const { jobId } = (await off.post(keys.poster)) as { jobId: string };
     const before = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
     await createDispatchStep(off.adapters.db, null)({ jobId });
     const after = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
@@ -77,6 +74,19 @@ describe("dispatch step", () => {
 });
 
 describe("house runner environment", () => {
+  it("marks the double agent's run", () => {
+    const env = houseRunnerEnv(
+      {
+        hqUrl: "http://localhost:8080",
+        apiKey: "sk_double",
+        modelBackend: "vertex",
+        simulateCheat: true,
+      },
+      {},
+    );
+    expect(env.SIDEAGENT_SIMULATE_CHEAT).toBe("1");
+  });
+
   it("passes only the runner's own settings, never HQ secrets", () => {
     const env = houseRunnerEnv(
       {

@@ -33,6 +33,27 @@ const Config = z.object({
   HOUSE_RUNNER_MODEL_BACKEND: ModelBackendName.default("vertex"),
   HOUSE_RUNNER_MODEL: z.string().min(1).optional(),
   HOUSE_RUNNER_MAX: z.coerce.number().int().positive().default(2),
+  // Demo double agent (Phase 5): dispatched instead of the honest runner, with its own key.
+  HOUSE_RUNNER_DOUBLE_AGENT: z.stringbool().default(false),
+  HOUSE_RUNNER_DOUBLE_AGENT_API_KEY: z.string().min(1).optional(),
+  // Platform agents (screener, trap writer, result screener): triage, then escalate below
+  // ESCALATE_BELOW confidence. Same project and location variables as the field CLI.
+  PLATFORM_MODEL_BACKEND: z.enum(["vertex", "gemini-api"]).default("vertex"),
+  MODEL_TRIAGE: z.string().min(1).default("gemini-2.5-flash-lite"),
+  MODEL_ESCALATE: z.string().min(1).default("gemini-2.5-flash"),
+  ESCALATE_BELOW: z.coerce.number().min(0).max(1).default(0.8),
+  GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
+  GOOGLE_CLOUD_LOCATION: z.string().default("global"),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  // Held with the budget on post; paid to platform fees once screening runs (D30).
+  SCREENING_FEE: z.coerce.number().int().nonnegative().default(1),
+  // Trap failures before a runner is burned (D29).
+  TRAP_BURN_AFTER: z.coerce.number().int().positive().default(1),
+  REDACTOR_BACKEND: z.enum(["pattern", "dlp"]).default("pattern"),
+  VAULT_BACKEND: z.enum(["local", "kms"]).default("local"),
+  // Local vault key: base64 of 32 bytes. Without it, one is generated into VAULT_LOCAL_KEY_FILE.
+  VAULT_LOCAL_KEY: z.string().min(1).optional(),
+  VAULT_LOCAL_KEY_FILE: z.string().default(".data/vault.key"),
 });
 export type Config = z.infer<typeof Config>;
 

@@ -1,6 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { AgentRole, AgentStatus } from "@sideagent/protocol";
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  type DocumentReference,
+  type Firestore,
+  type Timestamp,
+  type Transaction,
+} from "firebase-admin/firestore";
 import { sha256Hex } from "../hash.ts";
 
 export interface Agent {
@@ -50,4 +56,20 @@ export async function revokeAgent(db: Firestore, ownerId: string, agentId: strin
     tx.update(ref, { status, revokedAt: FieldValue.serverTimestamp() });
     return true;
   });
+}
+
+export function agentRef(db: Firestore, agentId: string): DocumentReference {
+  return db.collection("agents").doc(agentId);
+}
+
+/** Counts a trap failure on a runner in the caller's transaction, burning it if `burn` (D29). */
+export function recordTrapFailure(
+  tx: Transaction,
+  ref: DocumentReference,
+  trapsFailed: number,
+  burn: boolean,
+  at: Timestamp,
+): void {
+  const status: AgentStatus = "burned";
+  tx.update(ref, { trapsFailed, ...(burn ? { status, burnedAt: at } : {}) });
 }

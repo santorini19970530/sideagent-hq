@@ -25,6 +25,8 @@ export interface RunnerSettings {
   apiKey: string;
   modelBackend: ModelBackendName;
   model?: string;
+  /** Runs the demo double agent, which fakes its answers (Phase 5). */
+  simulateCheat?: boolean;
 }
 
 export interface LocalDispatcherOptions extends RunnerSettings {
@@ -34,7 +36,7 @@ export interface LocalDispatcherOptions extends RunnerSettings {
 }
 
 export function houseRunnerEnv(
-  { hqUrl, apiKey, modelBackend, model }: RunnerSettings,
+  { hqUrl, apiKey, modelBackend, model, simulateCheat }: RunnerSettings,
   parent: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -45,6 +47,7 @@ export function houseRunnerEnv(
     SIDEAGENT_API_KEY: apiKey,
     SIDEAGENT_MODEL_BACKEND: modelBackend,
     ...(model ? { SIDEAGENT_MODEL: model } : {}),
+    ...(simulateCheat ? { SIDEAGENT_SIMULATE_CHEAT: "1" } : {}),
   };
 }
 

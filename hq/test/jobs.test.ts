@@ -29,9 +29,10 @@ async function settled(key: string, jobId: string): Promise<JobStatus> {
 
 async function postedJob() {
   const keys = await h.agents();
-  const posted = await h.call(keys.poster, "POST", "/v1/jobs", h.jobSpec());
-  expect(posted.status).toBe(200);
-  return { keys, jobId: JobSummary.parse(posted.body).job_id };
+  const { res, jobId, status } = await h.post(keys.poster);
+  expect(res.status).toBe(200);
+  expect(status?.state).toBe("open");
+  return { keys, jobId: jobId! };
 }
 
 describe("auth", () => {
@@ -52,28 +53,36 @@ describe("auth", () => {
 });
 
 describe("post_job", () => {
-  it("opens the job and records draft → open", async () => {
-    const { keys, jobId } = await postedJob();
-    const status = JobStatus.parse((await h.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
-    expect(status.state).toBe("open");
-    expect(status.role).toBe("poster");
-    expect(status.events.map((e) => [e.from, e.to])).toEqual([
-      [null, "draft"],
-      ["draft", "open"],
-    ]);
+  it("returns a draft at once, then screens and reviews the job before it opens", async () => {
+    const keys = await h.agents();
+    const posted = await h.call(keys.poster, "POST", "/v1/jobs", h.jobSpec());
+    const summary = JobSummary.parse(posted.body);
+    expect(summary.state).toBe("draft");
+    await vi.waitFor(async () => {
+      const status = JobStatus.parse(
+        (await h.call(keys.poster, "GET", `/v1/jobs/${summary.job_id}`)).body,
+      );
+      expect(status.role).toBe("poster");
+      expect(status.events.map((e) => [e.from, e.to])).toEqual([
+        [null, "draft"],
+        ["draft", "screening"],
+        ["screening", "test_review"],
+        ["test_review", "open"],
+      ]);
+    });
   });
 
   it("returns the same job for a repeated idempotency key", async () => {
     const keys = await h.agents();
     const spec = h.jobSpec();
-    const first = await h.call(keys.poster, "POST", "/v1/jobs", spec);
+    const first = await h.post(keys.poster, spec);
     const second = await h.call(keys.poster, "POST", "/v1/jobs", spec);
     expect(second.status).toBe(200);
-    expect(second.body).toEqual(first.body);
+    expect(second.body).toEqual({ ...first.res.body, state: "open" });
     const status = JobStatus.parse(
-      (await h.call(keys.poster, "GET", `/v1/jobs/${first.body.job_id}`)).body,
+      (await h.call(keys.poster, "GET", `/v1/jobs/${first.jobId}`)).body,
     );
-    expect(status.events).toHaveLength(2);
+    expect(status.events).toHaveLength(4);
   });
 
   it("refuses a reused idempotency key with a different request", async () => {
@@ -122,10 +131,12 @@ describe("claim and submit", () => {
     expect(poster.result?.[0]?.content).toContain("return a + b");
     expect(poster.last_check).toMatchObject({
       outcome: "passed",
-      summary: { passed: 2, total: 2 },
+      summary: { passed: 3, total: 3 },
     });
     expect(poster.events.map((e) => e.to)).toEqual([
       "draft",
+      "screening",
+      "test_review",
       "open",
       "claimed",
       "submitted",
@@ -161,10 +172,11 @@ describe("claim and submit", () => {
     expect(poster.last_check).toEqual({
       submission_id: expect.any(String),
       outcome: "failed",
+      // The trap check counts under hidden.
       summary: {
         passed: 0,
-        total: 2,
-        categories: { hidden: { passed: 0, total: 1 }, public: { passed: 0, total: 1 } },
+        total: 3,
+        categories: { hidden: { passed: 0, total: 2 }, public: { passed: 0, total: 1 } },
       },
     });
 
@@ -313,18 +325,17 @@ describe("claim and submit", () => {
 });
 
 describe("escrow and stakes", () => {
-  it("holds the budget on post and pays it to the runner's owner on release", async () => {
+  it("holds budget and fee on post and pays the budget to the runner's owner on release", async () => {
     const posterKeys = await h.agents();
     const runnerKeys = await h.agents();
-    const posted = await h.call(posterKeys.poster, "POST", "/v1/jobs", h.jobSpec({ budget: 10 }));
-    const jobId = posted.body.job_id;
-    expect(await balance(posterKeys.poster)).toBe(90);
+    const { jobId } = await h.post(posterKeys.poster, h.jobSpec({ budget: 10 }));
+    expect(await balance(posterKeys.poster)).toBe(89);
 
     await h.call(runnerKeys.runner, "POST", `/v1/jobs/${jobId}/claim`);
     expect(await balance(runnerKeys.runner)).toBe(98);
-    await submit(runnerKeys.runner, jobId, SOLUTION, "s1");
-    expect((await settled(posterKeys.poster, jobId)).state).toBe("released");
-    expect(await balance(posterKeys.poster)).toBe(90);
+    await submit(runnerKeys.runner, jobId!, SOLUTION, "s1");
+    expect((await settled(posterKeys.poster, jobId!)).state).toBe("released");
+    expect(await balance(posterKeys.poster)).toBe(89);
     expect(await balance(runnerKeys.runner)).toBe(110);
   });
 
@@ -366,8 +377,8 @@ describe("claim timeout", () => {
 
       const reclaim = await h.call(keys.otherRunner, "POST", `/v1/jobs/${jobId}/claim`);
       expect(reclaim.status).toBe(200);
-      // Stake 2 held twice; half of the first one was slashed.
-      expect(await balance(keys.runner)).toBe(h.config.STARTING_CREDITS - 10 - 1 - 2);
+      // Budget and fee; stake 2 held twice, and half of the first one was slashed.
+      expect(await balance(keys.runner)).toBe(h.config.STARTING_CREDITS - 10 - 1 - 1 - 2);
     } finally {
       h.clock.now = started;
     }

@@ -10,6 +10,9 @@ const STATUS: Record<ErrorCode, 400 | 401 | 402 | 403 | 404 | 409 | 422 | 429 | 
   invalid_state: 409,
   insufficient_credits: 402,
   spec_not_checkable: 422,
+  job_blocked: 422,
+  tests_invalid: 422,
+  result_blocked: 422,
   rate_limited: 429,
   internal: 500,
 };

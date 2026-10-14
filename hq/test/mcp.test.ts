@@ -34,7 +34,7 @@ describe("MCP server", () => {
     const client = await connect((await h.agents()).poster);
     const res = await client.callTool({ name: "post_job", arguments: h.jobSpec() });
     expect(res.isError).toBeFalsy();
-    expect(JobSummary.parse(res.structuredContent).state).toBe("open");
+    expect(JobSummary.parse(res.structuredContent).state).toBe("draft");
   });
 
   it("returns typed errors as tool errors", async () => {

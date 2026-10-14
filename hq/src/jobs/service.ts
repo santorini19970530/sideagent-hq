@@ -18,7 +18,9 @@ import type {
 import { Timestamp, type DocumentData, type Firestore } from "firebase-admin/firestore";
 import { getJson, getText, putJson } from "../adapters/blob/helpers.ts";
 import type { BlobStore } from "../adapters/blob/types.ts";
-import type { PipelineRunner } from "../adapters/pipeline/types.ts";
+import type { PipelineRunner, PipelineStep } from "../adapters/pipeline/types.ts";
+import { restore } from "../adapters/redactor/redact.ts";
+import type { Vault } from "../adapters/vault/types.ts";
 import type { Config } from "../config.ts";
 import { HqError } from "../errors.ts";
 import { sha256Hex } from "../hash.ts";
@@ -39,22 +41,35 @@ import {
   jobNotFound,
   jobRef,
   toSummary,
-  transition,
   updateJob,
   type JobDoc,
 } from "../store/jobs.ts";
+import { loadPlaceholders } from "../store/vault.ts";
 
 const BOARD_STATES: readonly JobState[] = ["open", ...CLAIM_HELD_STATES];
 const BOARD_LIMIT = 50;
 const POLL_INTERVAL_MS = 1000;
 
+/** The pipeline step that moves a job on from each pre-board state. Steps are idempotent. */
+const PENDING_STEP: Partial<Record<JobState, PipelineStep>> = {
+  draft: "screen",
+  screening: "screen",
+  test_review: "review",
+  open: "dispatch",
+};
+
 export interface JobServiceDeps {
   db: Firestore;
   blobs: BlobStore;
   pipeline: PipelineRunner;
+  vault: Vault;
   config: Pick<
     Config,
-    "CLAIM_TTL_SECONDS" | "CLAIM_ATTEMPTS" | "STAKE_PERCENT" | "TIMEOUT_SLASH_PERCENT"
+    | "CLAIM_TTL_SECONDS"
+    | "CLAIM_ATTEMPTS"
+    | "STAKE_PERCENT"
+    | "TIMEOUT_SLASH_PERCENT"
+    | "SCREENING_FEE"
   >;
   now?: () => Date;
 }
@@ -66,6 +81,7 @@ export function createJobService({
   db,
   blobs,
   pipeline,
+  vault,
   config,
   now = () => new Date(),
 }: JobServiceDeps) {
@@ -98,7 +114,12 @@ export function createJobService({
     const summary = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists) return replayJob(jobId, snap.data() as JobDoc, requestHash);
-      requireCredits(await balanceInTx(tx, db, ownerAccount), input.budget, "This job's budget");
+      const fee = config.SCREENING_FEE;
+      requireCredits(
+        await balanceInTx(tx, db, ownerAccount),
+        input.budget + fee,
+        fee ? `This job's budget plus the ${fee}-credit screening fee` : "This job's budget",
+      );
       const ts = Timestamp.fromDate(at);
       const job: JobDoc = {
         posterAgentId: agent.id,
@@ -110,6 +131,7 @@ export function createJobService({
         specRef,
         publicTests: input.public_tests,
         budget: input.budget,
+        screeningFee: fee,
         deadline: Timestamp.fromDate(new Date(input.deadline)),
         claim: null,
         passedSubmissionId: null,
@@ -121,7 +143,6 @@ export function createJobService({
         updatedAt: ts,
       };
       appendEvent(tx, ref, job, null, "draft", "Posted", ts);
-      transition(tx, ref, job, "open", "Open for claims", ts);
       tx.create(ref, job);
       tx.create(ref.collection("private").doc("main"), { hiddenTestsRef, referenceSolutionRef });
       transfer(
@@ -130,16 +151,17 @@ export function createJobService({
         {
           from: ownerAccount,
           to: accounts.escrow(jobId),
-          amount: input.budget,
+          amount: input.budget + fee,
           jobId,
-          reason: "Budget held in escrow",
+          reason: fee ? "Budget and screening fee held in escrow" : "Budget held in escrow",
         },
         ts,
       );
       return toSummary(jobId, job);
     });
     // Idempotent, so a replay that reached the transaction may enqueue it again.
-    if (summary.state === "open") await pipeline.enqueue("dispatch", { jobId });
+    const step = PENDING_STEP[summary.state];
+    if (step) await pipeline.enqueue(step, { jobId });
     return summary;
   }
 
@@ -362,20 +384,26 @@ export function createJobService({
         outcome,
         ...(summary ? { summary } : {}),
       };
-      // The reason quotes the runner's own file names, so only the runner sees it.
-      if (role === "runner" && outcome === "rejected") {
+      // The reason is about the runner's own result, so only the runner sees it.
+      if (role === "runner" && (outcome === "rejected" || outcome === "blocked")) {
         const sub = await ref.collection("submissions").doc(submissionId).get();
         const reason = sub.get("rejectedReason") as string | null;
         if (reason) status.last_check.reason = reason;
       }
     }
-    // Posters never see a result before it passes and is released.
+    if (role === "poster") {
+      if (job.rejection) status.rejection = job.rejection;
+      if (job.redactions) status.redactions = job.redactions;
+    }
+    // Posters never see a result before it passes and is released. Private values come back
+    // only here, on the poster's side.
     if (role === "poster" && job.state === "released" && job.passedSubmissionId) {
-      const sub = await jobRef(db, jobId)
-        .collection("submissions")
-        .doc(job.passedSubmissionId)
-        .get();
-      status.result = await getJson<CodeFile[]>(blobs, sub.get("resultRef"));
+      const [sub, map] = await Promise.all([
+        jobRef(db, jobId).collection("submissions").doc(job.passedSubmissionId).get(),
+        loadPlaceholders(db, vault, jobId),
+      ]);
+      const result = await getJson<CodeFile[]>(blobs, sub.get("resultRef"));
+      status.result = result.map((f) => ({ ...f, content: restore(f.content, map) }));
     }
     return status;
   }

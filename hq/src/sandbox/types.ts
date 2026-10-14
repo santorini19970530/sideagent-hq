@@ -5,9 +5,8 @@ export interface CheckBundle {
   checkId: string;
   runtime: Runtime;
   result: CodeFile[];
-  publicTests: CodeFile[];
-  hiddenTests: CodeFile[];
-  trapTests: CodeFile[];
+  /** Test files per category (`public`, `hidden`, `trap`, …); each is scored on its own. */
+  tests: Record<string, CodeFile[]>;
 }
 
 /** A scored result, or a result the checker refused to run. */

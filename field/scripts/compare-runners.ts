@@ -161,9 +161,7 @@ async function runOnce(job: DemoCodeJob, runner: string): Promise<Run> {
         checkId: `${runner}-${started}`,
         runtime: "python",
         result,
-        publicTests: job.public_tests,
-        hiddenTests: job.hidden_tests,
-        trapTests: [],
+        tests: { public: job.public_tests, hidden: job.hidden_tests },
       });
       if (outcome.kind === "scored") ({ passed, total } = outcome.summary);
       else error ??= outcome.error.reason;
