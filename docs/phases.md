@@ -136,8 +136,11 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 2. A job containing an email and an account number reaches the runner as `[EMAIL_1]` and `[ACCT_1]`; the poster gets real values back.
 3. The double agent fails a trap check, is burned and loses its stake.
 
+- Done locally (2026-10-15) with `pnpm demo:counterintel` against Gemini on Vertex AI and the Docker sandbox: the `.env` job was rejected in 1.6 s with a fix hint and a feed entry; the private-data job reached the runner as `[EMAIL_1]` and `[ACCT_1]` and the poster got the real values back; the double agent's lookup table of the public answers failed the trap checks (D29), lost its stake and was burned. The script plays the double agent with the same code as `SIDEAGENT_SIMULATE_CHEAT=1`; with `HOUSE_RUNNER_DOUBLE_AGENT=1` HQ dispatches it as a house runner instead. Results under "Counterintelligence checks" in `technical.md`.
+- Also done: the first part of Phase 6 test review (the reference solution must pass its tests), because trap checks need it. Not yet: `REDACTOR_BACKEND=dlp` (Sensitive Data Protection) and the Cloud KMS vault, which come with Phase 7.
+
 **Tests**
-- Screener eval set reports block rate and false positives (run on demand, not in CI).
+- Screener eval set reports block rate and false positives (run on demand, not in CI): `pnpm --filter @sideagent/hq eval:screening`, 6/6 blocked and 0/6 false positives on Flash-Lite.
 - Trap failure moves the stake to `platform:fees`.
 
 ## Phase 6: Test review

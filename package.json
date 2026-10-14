@@ -13,6 +13,7 @@
     "emulators": "firebase emulators:start --config infra/firebase.json --project demo-sideagent --only firestore,auth",
     "demo:runner": "tsx demo/claim-and-submit.ts",
     "demo:escrow": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx demo/escrow.ts",
+    "demo:counterintel": "FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST:-127.0.0.1:8180} tsx demo/counterintel.ts",
     "field": "tsx field/src/cli.ts field",
     "compare:runners": "tsx field/scripts/compare-runners.ts",
     "sandbox:build": "docker build -t sideagent-sandbox-python:dev images/python-sandbox",

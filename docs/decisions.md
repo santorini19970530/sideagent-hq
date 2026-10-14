@@ -210,3 +210,21 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** Firestore rules can then check `request.auth.uid == ownerId` directly, with no lookup document, and one person maps to exactly one owner.
 
 **Trade-off:** One owner per Google account; team owners with several members are a roadmap item.
+
+## D29. Trap checks written by Gemini, kept only if the reference solution passes them (2026-10-15)
+
+**Decision:** The `review` step asks Gemini (`MODEL_ESCALATE`) for three trap checks from the job's spec and public tests, then runs the poster's `reference_solution` against the public tests, the hidden tests and each draft in one sandbox run. Drafts the reference fails are dropped; if the reference fails a public or hidden test, the job is rejected as `tests_invalid`. A job without a reference solution opens with no trap checks. In `check`, a result that passes every public test but fails every trap check counts as cheating (answers fitted to the examples): the whole stake goes to `platform:fees`, the claim ends, and after `TRAP_BURN_AFTER` such failures (default 1) the runner is burned and its key stops working. Trap counts are reported under `hidden`, so a runner can't tell which tests are traps. The demo double agent (`SIDEAGENT_SIMULATE_CHEAT=1`) submits a lookup table of the public answers.
+
+**Why:** A trap check must be something an honest solution essentially never fails, or honest runners get burned. Checking each draft against the poster's own reference solution makes that true by construction. Requiring the public tests to pass while every trap fails separates a faked answer from an honest wrong one, which usually passes some traps and keeps the stake-returning failure path of D23. Generated traps vary per job, so runners can't learn them.
+
+**Rejected:** A bank of fixed sting jobs (honest runners that fail a hard sting would be burned, and real jobs get no traps); one static trap file per runtime (catches only one kind of cheat).
+
+**Trade-off:** Jobs without a reference solution carry no traps, and the trap writer adds about 9 s to test review. Reputation, and "repeated failures burn", wait for the reputation model.
+
+## D30. Screening costs a flat 1 credit (2026-10-15)
+
+**Decision:** `post_job` holds the budget plus `SCREENING_FEE` (default 1 credit) in the job's escrow account. When screening finishes, the fee moves to `platform:fees`, whether the job is allowed or blocked. A job rejected by screening or test review gets its budget back. Test review has no separate fee for now.
+
+**Why:** A fee makes posting junk cost something and pays for the model calls, and a flat amount is easy to show in the ledger and to tune later.
+
+**Trade-off:** A flat fee is the same for a 1-credit and a 100-credit job.

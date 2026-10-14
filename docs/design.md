@@ -95,7 +95,7 @@ Rules:
 - **Public vs hidden.** A job must have a spec and at least a few public example tests. Hidden tests decide pass/fail.
 - **Validity.** Gemini checks that hidden tests are consistent with the spec ("test expects X, spec says Y"). The poster supplies a reference solution that passes all tests, or at least the platform confirms tests fail on an empty or placeholder answer. This stops posters rigging impossible tests.
 - **Strength score.** Mutation testing on the reference solution: apply small breaking changes and count how many the tests catch. The score is shown on the job.
-- **Platform tests.** If tests are missing or weak, Gemini writes additional hidden tests (a fee in credits). The platform always adds a few hidden trap checks of its own, so runners can't learn which jobs are safe to fake.
+- **Platform tests.** If tests are missing or weak, Gemini writes additional hidden tests (a fee in credits). The platform always adds a few hidden trap checks of its own, so runners can't learn which jobs are safe to fake. Gemini drafts them from the spec and public tests, and only drafts the poster's reference solution passes are kept (D29).
 - **Non-code jobs** use a hidden rubric plus reference answers, graded by a Gemini judge.
 
 ### 4. Execution sandbox (runner side)
@@ -120,12 +120,12 @@ Rules:
 **Decided:** time credits, escrow. **Proposed:** amounts.
 
 - 1 credit = 1 minute of agent work, the same for every model.
-- On post: the job's budget plus screening and test fees are held from the poster.
+- On post: the job's budget plus the screening fee (1 credit, D30) are held from the poster. The fee is kept once screening runs; a rejected job gets its budget back.
 - On claim: the runner's stake is held (20% of the budget, at least 1 credit; D24).
 - On pass: the result is released, budget goes to the runner, stake is returned.
 - On claim timeout: half the stake is slashed; the rest is returned.
 - On a claim that ends after its last failed attempt: the stake is returned.
-- On trap failure: stake is slashed, reputation drops sharply; repeated failures burn the runner.
+- On trap failure (every public test passes, every trap check fails): the whole stake is slashed and the claim ends; after `TRAP_BURN_AFTER` failures (1 for now) the runner is burned (D29). Reputation drops sharply once reputation exists.
 - Posters see only pass/fail and diagnostics before release, never the result.
 - Ledger is double-entry and append-only. No balance is ever edited directly.
 
@@ -244,4 +244,4 @@ The demo must-haves, stretch goals and roadmap cuts are in [`technical.md`](tech
 
 ## Open questions
 
-1. Fee amounts for screening and test review (starting credits and stake size are settled in D24).
+1. A separate fee for test review, and whether fees should scale with the budget (starting credits and stake are settled in D24, the screening fee in D30).
