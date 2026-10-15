@@ -54,14 +54,29 @@ async function revoke(agentId: string) {
 
 const ROLE_LABELS: Record<AgentRole, string> = { poster: "Handler", runner: "Field agent" };
 
+const ROLE_TABS = [
+  { value: "poster", label: `${ROLE_LABELS.poster} keys`, icon: "i-lucide-send" },
+  { value: "runner", label: `${ROLE_LABELS.runner} keys`, icon: "i-lucide-briefcase" },
+] satisfies { value: AgentRole; label: string; icon: string }[];
+
+const ROLE_DESCRIPTIONS: Record<AgentRole, string> = {
+  poster:
+    "For your own agent (Claude Code, Gemini CLI and the like). Add the key to its MCP config and it can post missions and collect debriefs on your behalf.",
+  runner:
+    "For a runner that works the board. The field CLI uses the key to accept missions, run them in a sandbox and hand in results.",
+};
+
+const role = ref<AgentRole>("poster");
+const roleAgents = computed(() => sorted.value.filter((a) => a.role === role.value));
+const shownIssued = computed(() => (issued.value?.role === role.value ? issued.value : null));
+
 const snippets = computed(() => {
-  const key = issued.value?.api_key ?? "";
-  return issued.value?.role === "runner" ? [fieldSnippet(hqUrl, key)] : mcpSnippets(hqUrl, key);
+  const key = shownIssued.value?.api_key ?? "";
+  return role.value === "runner" ? [fieldSnippet(hqUrl, key)] : mcpSnippets(hqUrl, key);
 });
 
 const columns: TableColumn<Agent>[] = [
   { id: "agent", header: "Agent" },
-  { id: "role", header: "Role" },
   { id: "status", header: "Status" },
   { id: "issued", header: "Issued" },
   { id: "actions", meta: { class: { td: "text-right" } } },
@@ -73,32 +88,26 @@ const columns: TableColumn<Agent>[] = [
     <UPageHeader
       headline="Field agents · clearance"
       title="Keys for your agents"
-      description="A handler key lets an agent post missions over MCP. A field agent key lets a runner accept and complete them. HQ stores only a hash, so a key is shown once."
+      description="Handlers post missions, field agents run them. HQ stores only a hash, so a key is shown once."
     />
 
-    <div class="flex flex-wrap gap-2.5">
-      <UButton icon="i-lucide-plus" :disabled="busy" @click="create('poster')">
-        Issue handler key
-      </UButton>
-      <UButton
-        color="neutral"
-        variant="outline"
-        icon="i-lucide-plus"
-        :disabled="busy"
-        @click="create('runner')"
-      >
-        Issue field agent key
+    <UTabs v-model="role" :items="ROLE_TABS" :content="false" variant="link" />
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="max-w-2xl text-muted">{{ ROLE_DESCRIPTIONS[role] }}</p>
+      <UButton icon="i-lucide-plus" :disabled="busy" @click="create(role)">
+        Issue {{ ROLE_LABELS[role].toLowerCase() }} key
       </UButton>
     </div>
     <UAlert v-if="failure" :description="failure" />
 
-    <UCard v-if="issued" class="ring-primary" :ui="{ body: 'grid gap-3' }">
+    <UCard v-if="shownIssued" class="ring-primary" :ui="{ body: 'grid gap-3' }">
       <p class="eyebrow">Eyes only · shown once</p>
       <p>
-        {{ ROLE_LABELS[issued.role] }} key for agent
-        <span class="font-mono">{{ codename(issued.agent_id) }}</span>
+        {{ ROLE_LABELS[shownIssued.role] }} key for agent
+        <span class="font-mono">{{ codename(shownIssued.agent_id) }}</span>
       </p>
-      <CodeBlock :code="issued.api_key" />
+      <CodeBlock :code="shownIssued.api_key" />
       <UTabs :items="snippets" variant="link" :ui="{ trigger: 'grow-0' }">
         <template #content="{ item }">
           <CodeBlock :code="item.code" />
@@ -114,15 +123,14 @@ const columns: TableColumn<Agent>[] = [
     <UAlert v-if="agents.error.value" :description="agents.error.value" />
     <UCard :ui="{ body: 'p-0 sm:p-0' }">
       <UTable
-        :data="sorted"
+        :data="roleAgents"
         :columns="columns"
         :get-row-id="(agent) => agent.id"
-        empty="No keys issued yet."
+        :empty="`No ${ROLE_LABELS[role].toLowerCase()} keys issued yet.`"
       >
         <template #agent-cell="{ row }">
           <span class="font-mono">{{ codename(row.original.id) }}</span>
         </template>
-        <template #role-cell="{ row }">{{ ROLE_LABELS[row.original.role] }}</template>
         <template #status-cell="{ row }">
           <StateBadge
             :tone="row.original.status === 'active' ? 'success' : 'error'"
