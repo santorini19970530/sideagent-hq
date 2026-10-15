@@ -266,3 +266,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** Ready-made components give accessible tables, modals, tabs, tooltips and a mobile menu with less code to maintain, and make the dashboard look finished for the demo. `@vueuse/firebase`'s `useFirestore` was the alternative to `live()`, but it has no error state and resubscribes when a query is rebuilt with the same value, which would make the mission log flash on every job update.
 
 **Trade-off:** A bigger client bundle (Nuxt UI, Reka UI, TanStack Table) and Tailwind's preflight, which the Vue Flow canvas has to live with. Icons are bundled on the client and not fetched, so an icon name that the build's scan can't see (one built at runtime) needs adding to `icon.clientBundle.icons` in `nuxt.config.ts`.
+
+## D35. The video's honest field agent is Gemma on a laptop; `data.extract` waits (2026-10-15)
+
+**Decision:** In the demo, the double agent claims the sting mission first and is burned; then `demo/run-demo.ts` starts the laptop field agent on Gemma (`sideagent field --once --job <id>`), which takes the reopened mission and submits the honest result. House runners on Gemini still finish the other missions. The `data.extract` fan-out leaves the demo script for the roadmap slide. Assumed while the team was away; revisit if either is wrong.
+
+**Why:** A reopened job isn't dispatched to a house runner again (D27), so something else has to finish it, and a laptop on an open model is the supply story of D1. Only `code.implement` in Python exists; a new job type this close to submission is the riskiest change left.
+
+**Trade-off:** The house runner dispatched when the sting opens can still win the reopened mission instead of Gemma if the double agent's check finishes before the house runner's claim; the honest result still passes, but by Gemini. The demo shows one job type.

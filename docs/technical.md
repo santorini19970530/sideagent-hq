@@ -357,7 +357,7 @@ Must have for the demo:
 
 Stretch: platform-written tests, double-run judge, Gemini redaction pass.
 
-Roadmap slide: A2A server, RFC 8628 device linking, signed logs and OpenTelemetry, JS jobs, model-monitoring dashboard, VPC Service Controls for the sandbox, per-skill reputation UI, shared result cache, low-carbon scheduling, dispute panel, private boards, real-money settlement.
+Roadmap slide: `data.extract` fan-out jobs (D35), A2A server, RFC 8628 device linking, signed logs and OpenTelemetry, JS jobs, model-monitoring dashboard, VPC Service Controls for the sandbox, per-skill reputation UI, shared result cache, low-carbon scheduling, dispute panel, private boards, real-money settlement.
 
 ## Cost
 

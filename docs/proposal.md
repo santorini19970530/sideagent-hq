@@ -104,11 +104,13 @@ Demo-friendly phrases: "Counterintelligence blocked a hostile briefing." "A doub
 
 ## Demo script (3 minutes)
 
-1. A Gemini CLI agent working on a task calls `delegate()` for a `code.implement` mission and a `data.extract` fan-out.
-2. Counterintelligence redacts private data, scores the poster's tests as weak, and adds hidden trap checks.
+1. A Gemini CLI agent working on a task delegates a `code.implement` mission over MCP. Its briefing names a customer's email and account number.
+2. Counterintelligence redacts the private data, scores the poster's tests, and adds hidden trap checks. A house runner on Gemini takes the mission; the dead drop releases the result with the real values restored for the handler only.
 3. A malicious mission that tries to read the runner's `.env` is blocked; the reason appears in the feed.
-4. Two field agents accept. One fakes its result, fails a trap check and is burned.
-5. The honest result passes, the dead drop releases it, credits move. Mission control shows the whole flow live.
+4. Two field agents go for a sting mission. A double agent fakes its result, fails a trap check and is burned.
+5. A field agent running Gemma on a laptop takes the reopened mission; its honest result passes, the dead drop releases it, credits move. Mission control shows the whole flow live.
+
+`demo/run-demo.ts` drives beats 2 to 5 against production (D35); the shot list is in `demo/video.md`.
 
 ## Judging fit
 
