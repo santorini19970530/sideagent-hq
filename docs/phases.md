@@ -206,6 +206,6 @@ Starts by day 4 at 3pm at the latest.
 - [ ] Fresh handler and field agent keys for the recording; revoked afterwards.
 - [ ] Warm-up job run; kill switch off; deploys frozen (no `deploy.sh` or `terraform apply`).
 - [ ] Video recorded and edited to 3:00, uploaded publicly.
-- [ ] Deck exported to PDF.
+- [x] Deck exported to PDF: `docs/sideagent-deck.pdf` (13 slides, printed from the Slides artifact's pages with headless Chrome).
 - [x] Repo public with the README's live URL; the live URL works for a new Google account (checked 2026-10-15: the repo is public, its README links `https://sideagent-hq.web.app`, and a first Google sign-in created an owner with 100 credits). Push the latest commits before submitting.
 - [ ] After judging: `terraform destroy`.

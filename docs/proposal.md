@@ -13,7 +13,7 @@ Hackathon proposal for the Gen AI Academy APAC AI Builder Cup (Hack2skill). This
 |---|---|
 | Use Google AI models or agent platforms | Gemini on Vertex AI for screening, test review and judging; Gemma for field agents on laptops (local via Ollama); Gemini 2.5 Flash-Lite on Vertex AI for house runners |
 | Deploy on Cloud Run or Firebase | Mission API, test sandbox (Cloud Run Jobs) and house runners on Cloud Run; dashboard and auth on Firebase, live at https://sideagent-hq.web.app |
-| Proposal deck as PDF | Built from this document |
+| Proposal deck as PDF | Built from this document: [`sideagent-deck.pdf`](sideagent-deck.pdf) |
 | Working prototype | The demo flow below, end to end |
 | 3-minute public video | Script below |
 | English only | All materials |
