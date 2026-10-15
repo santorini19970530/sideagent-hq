@@ -7,15 +7,16 @@
 // with GOOGLE_CLOUD_PROJECT set for Gemini. Run HQ with HOUSE_RUNNERS=off so nothing races it.
 import { randomUUID } from "node:crypto";
 import { fakeSolution } from "../field/src/executor/cheat.ts";
-import { createAdapters } from "../hq/src/adapters/index.ts";
 import { loadConfig } from "../hq/src/config.ts";
 import { createAgent } from "../hq/src/store/agents.ts";
+import { createFirestore } from "../hq/src/store/firestore.ts";
 import { createOwner } from "../hq/src/store/owners.ts";
+import { createDemoClient } from "./hq.ts";
 import { EXFIL_JOB, PRIVATE_JOB, STING_JOB, type DemoJob } from "./jobs/counterintel.ts";
 
 const config = loadConfig();
 const hq = process.env.SIDEAGENT_HQ_URL ?? `http://localhost:${config.PORT}`;
-const { db } = createAdapters(config);
+const db = createFirestore(config);
 
 const posterOwner = await createOwner(db, "Demo handler", config.STARTING_CREDITS);
 const runnerOwner = await createOwner(db, "Demo field agent", config.STARTING_CREDITS);
@@ -24,40 +25,11 @@ const poster = (await createAgent(db, posterOwner, "poster")).apiKey;
 const runner = (await createAgent(db, runnerOwner, "runner")).apiKey;
 const cheat = (await createAgent(db, cheatOwner, "runner")).apiKey;
 
-async function call(key: string, method: string, path: string, body?: unknown) {
-  const res = await fetch(`${hq}/v1${path}`, {
-    method,
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = await res.json();
-  return { status: res.status, body: json };
-}
-
-async function must(key: string, method: string, path: string, body?: unknown) {
-  const res = await call(key, method, path, body);
-  if (res.status !== 200) {
-    throw new Error(`${method} ${path} → ${res.status} ${JSON.stringify(res.body)}`);
-  }
-  return res.body;
-}
-
-/** Polls the poster's view until the job leaves every state in `waiting`. */
-async function until(jobId: string, waiting: string[]) {
-  for (;;) {
-    const status = await must(poster, "GET", `/jobs/${jobId}`);
-    if (!waiting.includes(status.state)) return status;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-}
+const client = createDemoClient(hq, db, poster);
+const { call, must, until } = client;
 
 async function post(job: DemoJob) {
-  const deadline = new Date(Date.now() + 3600_000).toISOString();
-  const { job_id } = await must(poster, "POST", "/jobs", {
-    ...job,
-    deadline,
-    idempotency_key: randomUUID(),
-  });
+  const job_id = await client.post(job);
   const started = Date.now();
   const status = await until(job_id, ["draft", "screening", "test_review"]);
   console.log(`  ${status.state} after ${((Date.now() - started) / 1000).toFixed(1)} s`);
@@ -74,8 +46,7 @@ async function submit(key: string, jobId: string, result: unknown) {
 }
 
 async function feed(jobId: string) {
-  const snap = await db.collection("feed").where("jobId", "==", jobId).get();
-  for (const doc of snap.docs) console.log(`  Feed: [${doc.get("kind")}] ${doc.get("detail")}`);
+  for (const detail of await client.feed(jobId)) console.log(`  Feed: ${detail}`);
 }
 
 console.log(`HQ ${hq}\n\n1. ${EXFIL_JOB.title}`);
