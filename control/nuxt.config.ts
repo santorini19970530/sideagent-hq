@@ -25,7 +25,17 @@ export default defineNuxtConfig({
       title: "Mission control",
       titleTemplate: "%s · Sideagent",
       htmlAttrs: { lang: "en", class: "dark" },
-      meta: [{ name: "viewport", content: "width=device-width, initial-scale=1" }],
+      meta: [
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "theme-color", content: "#0b0f14" },
+      ],
+      // The header mark: a signal ring on the ink page. favicon.ico is the fallback for
+      // browsers without SVG favicons.
+      link: [
+        { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+        { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+        { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      ],
     },
   },
   runtimeConfig: {
