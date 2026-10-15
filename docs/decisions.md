@@ -203,6 +203,8 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Trade-off:** A laptop runner and the house runner race for every job, and a job that reopens after a failed claim is not dispatched again. A dispatch delay can come with Phase 5, when the demo races Gemma, the double agent and the house runner.
 
+**Amended by D38:** the dispatch step waits a short grace period, and the house runner no longer shows in the mission log.
+
 ## D28. An owner's ID is their Firebase Auth UID (2026-10-15)
 
 **Decision:** `owners/{ownerId}` uses the Firebase Auth UID of the person who signs in to mission control. HQ creates the owner on first sign-in. Owners created by the seed script (local dev and house runners) keep generated IDs and can't sign in.
@@ -290,3 +292,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** "Counterintelligence" is long and doesn't say what it does at first glance. A checkpoint is where things are inspected before they pass, which is exactly the job, and it still fits the spy theme.
 
 **Trade-off:** The submission deck (PDF and PPTX) still says "Counterintelligence" until it is regenerated.
+
+## D38. House runners wait a few seconds and stay out of the mission log (2026-10-15)
+
+**Decision:** The `dispatch` step runs `HOUSE_RUNNER_DELAY_SECONDS` (default 10) after a job opens, through a Cloud Tasks `scheduleTime` or a local timer, and does nothing if the job was claimed meanwhile. It records only `dispatchedAt` on the job; the "Field agent dispatched" and "dispatch failed" events are gone, so the mission log reads "open", then "Field agent ABCD took the mission", whoever claims it.
+
+**Why:** A house runner that grabs every job the moment it opens leaves nothing for outside field agents, which defeats the marketplace. Outside field agents long-poll HQ, so a few seconds is enough for one that is online. Showing the house runner in the log also made the platform look like it runs its own work, and the event was a step no other field agent has.
+
+**Trade-off:** Every job a house runner takes finishes about 10 s later, which the video absorbs. A failed house-runner start is now only in HQ's logs and the retried task, not on the job.

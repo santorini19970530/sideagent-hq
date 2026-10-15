@@ -79,7 +79,8 @@ export interface JobUpdate {
 
 /**
  * Reads a job in a transaction, lets `fn` change it, and writes it back if it moved.
- * Every field change goes with a transition, so an unmoved job needs no write.
+ * Field changes normally go with a transition, so an unmoved job needs no write; a change
+ * without one (the dispatch mark) goes through `u.tx.update` itself.
  * `fn` must do any extra reads before calling `move`, which writes an event.
  */
 export async function updateJob<T>(

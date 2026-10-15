@@ -34,6 +34,7 @@ type Task = {
   audience: string;
   email: string;
   deadline: unknown;
+  schedule: unknown;
 };
 const QUEUES = "projects/demo-sideagent/locations/us-west1/queues";
 
@@ -49,6 +50,7 @@ function fakeTasks() {
         audience: req.oidcToken!.audience!,
         email: req.oidcToken!.serviceAccountEmail!,
         deadline: task!.dispatchDeadline,
+        schedule: task!.scheduleTime,
       });
       return [task];
     },
@@ -65,6 +67,7 @@ function cloudHarness() {
       TASKS_QUEUE: "sideagent-pipeline",
       TASKS_SANDBOX_QUEUE: "sideagent-sandbox",
       TASKS_SA_EMAIL: TASKS_SA,
+      HOUSE_RUNNER_DELAY_SECONDS: 10,
     },
     gcp: { tasks: fake.client, idTokens: verifier },
   });
@@ -91,6 +94,7 @@ describe("cloud-tasks pipeline", () => {
 
     // screen, review, dispatch: each run enqueues the next.
     const ran: string[] = [];
+    const now = Math.floor(Date.now() / 1000);
     while (h.tasks.length) {
       const task = h.tasks.shift()!;
       expect(task).toMatchObject({
@@ -99,7 +103,16 @@ describe("cloud-tasks pipeline", () => {
         deadline: { seconds: 1800 },
       });
       expect(JSON.parse(task.body)).toEqual({ jobId });
-      ran.push(`${task.queue.slice(QUEUES.length + 1)} ${new URL(task.url).pathname}`);
+      const path = new URL(task.url).pathname;
+      // Only dispatch waits, giving outside field agents a head start on the house runner.
+      if (path.endsWith("/dispatch")) {
+        const at = (task.schedule as { seconds: number }).seconds;
+        expect(at - now).toBeGreaterThanOrEqual(10);
+        expect(at - now).toBeLessThanOrEqual(15);
+      } else {
+        expect(task.schedule).toBeUndefined();
+      }
+      ran.push(`${task.queue.slice(QUEUES.length + 1)} ${path}`);
       expect((await h.deliver(task)).status).toBe(200);
     }
     // Review runs the sandbox, so it waits its turn on the one-at-a-time queue.

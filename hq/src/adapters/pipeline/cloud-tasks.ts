@@ -38,7 +38,7 @@ export function createCloudTasksPipeline({
   serviceAccountEmail,
 }: CloudTasksPipelineOptions): PipelineRunner {
   return {
-    async enqueue(step, payload) {
+    async enqueue(step, payload, { delaySeconds = 0 } = {}) {
       await client.createTask({
         parent: SANDBOX_STEPS.has(step) ? sandboxQueue : queue,
         task: {
@@ -50,6 +50,9 @@ export function createCloudTasksPipeline({
             oidcToken: { serviceAccountEmail, audience: hqUrl },
           },
           dispatchDeadline: { seconds: DISPATCH_DEADLINE_SECONDS },
+          ...(delaySeconds > 0 && {
+            scheduleTime: { seconds: Math.ceil(Date.now() / 1000) + delaySeconds },
+          }),
         },
       });
     },

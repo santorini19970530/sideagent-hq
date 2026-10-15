@@ -23,7 +23,10 @@ export interface ReviewDeps {
   blobs: BlobStore;
   model: PlatformModel;
   sandbox: Sandbox;
-  config: Pick<Config, "MODEL_ESCALATE" | "LIMIT_MUTANTS" | "TEST_STRENGTH_MIN">;
+  config: Pick<
+    Config,
+    "MODEL_ESCALATE" | "LIMIT_MUTANTS" | "TEST_STRENGTH_MIN" | "HOUSE_RUNNER_DELAY_SECONDS"
+  >;
   pipeline: Pick<PipelineRunner, "enqueue">;
 }
 
@@ -161,7 +164,13 @@ export function createReviewStep({
       );
       return true;
     });
-    if (opened) await pipeline.enqueue("dispatch", { jobId });
+    if (opened) {
+      await pipeline.enqueue(
+        "dispatch",
+        { jobId },
+        { delaySeconds: config.HOUSE_RUNNER_DELAY_SECONDS },
+      );
+    }
   };
 }
 

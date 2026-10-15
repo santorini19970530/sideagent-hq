@@ -8,6 +8,13 @@ export interface StepPayload {
 export type StepHandler = (payload: StepPayload) => Promise<void>;
 
 export interface PipelineRunner {
-  /** Schedules a step; it runs after the caller's work completes, never inline with it. */
-  enqueue(step: PipelineStep, payload: StepPayload): Promise<void>;
+  /**
+   * Schedules a step; it runs after the caller's work completes, never inline with it, and no
+   * sooner than `delaySeconds` from now.
+   */
+  enqueue(
+    step: PipelineStep,
+    payload: StepPayload,
+    opts?: { delaySeconds?: number },
+  ): Promise<void>;
 }

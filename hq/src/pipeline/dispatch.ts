@@ -1,13 +1,14 @@
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { HouseRunnerDispatcher } from "../adapters/dispatch/types.ts";
 import type { StepHandler } from "../adapters/pipeline/types.ts";
 import type { Limits } from "../limits.ts";
-import { appendEvent, updateJob } from "../store/jobs.ts";
+import { jobRef, updateJob } from "../store/jobs.ts";
 
 /**
- * Starts one house-runner run for a newly opened job. The job stays `open`; the run claims it
- * like any runner. Without a dispatcher (`HOUSE_RUNNERS=off`), or while the platform is paused
- * (D32), outside runners take the job.
+ * Starts one house-runner run for a job still open after the grace period (D27). The job stays
+ * `open`; the run claims it like any runner, and the mission log doesn't mention the dispatch, so a
+ * house runner looks like any other field agent. Without a dispatcher (`HOUSE_RUNNERS=off`), or
+ * while the platform is paused (D32), outside runners take the job.
  */
 export function createDispatchStep(
   db: Firestore,
@@ -19,8 +20,7 @@ export function createDispatchStep(
     // Marked first, so a retried step never starts a second run.
     const marked = await updateJob(db, jobId, new Date(), (u) => {
       if (u.job.state !== "open" || u.job.dispatchedAt) return false;
-      u.job.dispatchedAt = u.at;
-      appendEvent(u.tx, u.ref, u.job, "open", "open", "Field agent dispatched", u.at);
+      u.tx.update(u.ref, { dispatchedAt: u.at });
       return true;
     });
     if (!marked) return;
@@ -28,18 +28,7 @@ export function createDispatchStep(
       await dispatcher.start(jobId);
     } catch (err) {
       // Unmarked, so a retry can dispatch again; outside runners can still claim the job.
-      await updateJob(db, jobId, new Date(), (u) => {
-        delete u.job.dispatchedAt;
-        appendEvent(
-          u.tx,
-          u.ref,
-          u.job,
-          u.job.state,
-          u.job.state,
-          "Field agent dispatch failed",
-          u.at,
-        );
-      });
+      await jobRef(db, jobId).update({ dispatchedAt: FieldValue.delete() });
       throw err;
     }
   };

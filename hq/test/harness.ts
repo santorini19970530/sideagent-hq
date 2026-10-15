@@ -138,6 +138,7 @@ export function createHarness({
     VAULT_LOCAL_KEY_FILE: join(dir, "vault.key"),
     LIMIT_POSTS_PER_HOUR: 1_000_000,
     LIMIT_POSTS_PER_DAY: 1_000_000,
+    HOUSE_RUNNER_DELAY_SECONDS: 0,
     ...overrides,
   };
   const sandbox = createFakeSandbox();

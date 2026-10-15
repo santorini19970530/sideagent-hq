@@ -2,6 +2,7 @@ import { JobStatus, JobSummary } from "@sideagent/protocol";
 import { describe, expect, it, vi } from "vitest";
 import { houseRunnerEnv } from "../src/adapters/dispatch/local.ts";
 import { createDispatchStep } from "../src/pipeline/dispatch.ts";
+import { jobRef } from "../src/store/jobs.ts";
 import { createHarness } from "./harness.ts";
 
 const start = vi.fn(async (_jobId: string) => {});
@@ -9,6 +10,10 @@ const h = createHarness({ dispatcher: { start } });
 
 async function status(key: string, jobId: string): Promise<JobStatus> {
   return JobStatus.parse((await h.call(key, "GET", `/v1/jobs/${jobId}`)).body);
+}
+
+async function dispatchedAt(harness: typeof h, jobId: string): Promise<unknown> {
+  return (await jobRef(harness.adapters.db, jobId).get()).get("dispatchedAt");
 }
 
 describe("dispatch step", () => {
@@ -24,13 +29,11 @@ describe("dispatch step", () => {
     await createDispatchStep(h.adapters.db, { start }, h.adapters.limits)({ jobId });
     expect(start.mock.calls.filter(([id]) => id === jobId)).toHaveLength(1);
 
+    // Marked on the job, but the mission log doesn't show the house runner.
+    expect(await dispatchedAt(h, jobId)).toBeDefined();
     const s = await status(keys.poster, jobId);
     expect(s.state).toBe("open");
-    expect(s.events.map((e) => [e.from, e.to, e.detail]).at(-1)).toEqual([
-      "open",
-      "open",
-      "Field agent dispatched",
-    ]);
+    expect(s.events.at(-1)).toMatchObject({ from: "test_review", to: "open" });
   });
 
   it("skips jobs that are no longer open", async () => {
@@ -51,15 +54,11 @@ describe("dispatch step", () => {
     await expect(
       createDispatchStep(off.adapters.db, { start: failing }, off.adapters.limits)({ jobId }),
     ).rejects.toThrow("busy");
+    expect(await dispatchedAt(off, jobId)).toBeUndefined();
     const retry = vi.fn(async () => {});
     await createDispatchStep(off.adapters.db, { start: retry }, off.adapters.limits)({ jobId });
     expect(retry).toHaveBeenCalledWith(jobId);
-    const s = JobStatus.parse((await off.call(keys.poster, "GET", `/v1/jobs/${jobId}`)).body);
-    expect(s.events.slice(-3).map((e) => e.detail)).toEqual([
-      "Field agent dispatched",
-      "Field agent dispatch failed",
-      "Field agent dispatched",
-    ]);
+    expect(await dispatchedAt(off, jobId)).toBeDefined();
   });
 
   it("does nothing when house runners are off", async () => {

@@ -57,6 +57,9 @@ const Config = z.object({
   HOUSE_RUNNER_API_KEY: z.string().min(1).optional(),
   HOUSE_RUNNER_MODEL_BACKEND: ModelBackendName.default("vertex"),
   HOUSE_RUNNER_MODEL: z.string().min(1).optional(),
+  // Grace period before a house runner is started for a newly opened job, so an outside field
+  // agent online can claim it first (D27).
+  HOUSE_RUNNER_DELAY_SECONDS: z.coerce.number().int().nonnegative().default(10),
   HOUSE_RUNNER_MAX: z.coerce.number().int().positive().default(2),
   // Passed to house runners as SIDEAGENT_MAX_TOKENS (D32).
   HOUSE_RUNNER_MAX_TOKENS: z.coerce.number().int().positive().default(200_000),
