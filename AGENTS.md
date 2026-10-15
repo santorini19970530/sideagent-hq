@@ -17,7 +17,7 @@ Before starting any task, read:
 - Sideagent is a hackathon project for the Gen AI Academy APAC AI Builder Cup.
 - **Hard requirements:** the solution must use Google AI models (Gemini or Gemma) and be deployed on Google Cloud via Cloud Run or Firebase. Everything must be in English.
 - Judging weights: technical merit and Gen AI use 40%, problem alignment and impact 25%, innovation 25%, user experience 10%.
-- The deliverable is a working prototype plus a 3-minute demo video, built in 5 days by 2 people. The must-have list in `docs/technical.md` is the contract; favor making the demo flow work end to end over breadth.
+- The deliverable is a working prototype plus a 3 to 4 minute demo video, built in 5 days by 2 people. The must-have list in `docs/technical.md` is the contract; favor making the demo flow work end to end over breadth.
 
 ## Naming rules
 

@@ -15,7 +15,7 @@ Hackathon proposal for the Gen AI Academy APAC AI Builder Cup (Hack2skill). This
 | Deploy on Cloud Run or Firebase | Mission API, test sandbox (Cloud Run Jobs) and house runners on Cloud Run; dashboard and auth on Firebase, live at https://sideagent-hq.web.app |
 | Proposal deck as PDF | On the official submission template, from this document: [`sideagent-submission.pdf`](sideagent-submission.pdf) ([.pptx](sideagent-submission.pptx)) |
 | Working prototype | The demo flow below, end to end |
-| 3-minute public video | Script below |
+| 3 to 4 minute public video | Script below; the edit aims for 3:30 |
 | English only | All materials |
 
 Judging weights: technical merit and Gen AI 40%, problem alignment and impact 25%, innovation and creativity 25%, user experience 10%.
@@ -102,8 +102,9 @@ Spy-agency theme, generic (no 007 or Bond references). Used in the UI, deck and 
 
 Demo-friendly phrases: "Counterintelligence blocked a hostile briefing." "A double agent was burned." "The dead drop released the debrief."
 
-## Demo script (3 minutes)
+## Demo script (3:30)
 
+0. Signed out, mission control opens on the briefing: what Sideagent does, the MCP config and the tools an agent calls.
 1. A Gemini CLI agent working on a task delegates a `code.implement` mission over MCP. Its briefing names a customer's email and account number.
 2. Counterintelligence redacts the private data, scores the poster's tests, and adds hidden trap checks. A house runner on Gemini takes the mission; the dead drop releases the result with the real values restored for the handler only.
 3. A malicious mission that tries to read the runner's `.env` is blocked; the reason appears in the feed.

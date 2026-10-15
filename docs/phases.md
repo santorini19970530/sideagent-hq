@@ -193,7 +193,7 @@ Starts by day 4 at 3pm at the latest.
 **Scope**
 - `demo/run-demo.ts` drives the full video scenario from `proposal.md`.
 - Warm up by running one demo job, rehearse twice, freeze deploys.
-- Record the 3-minute video; build the deck PDF from `proposal.md`.
+- Record the 3 to 4 minute video (aim for 3:30); build the deck PDF from `proposal.md`.
 
 **Review**
 - Final video and deck.
@@ -205,7 +205,8 @@ Starts by day 4 at 3pm at the latest.
 - [x] Two clean rehearsals of `pnpm demo:run` against production (270 s and 268 s), and one of the full flow with Gemini CLI posting the first mission (243 s after the handoff; `demo/video.md`).
 - [ ] Fresh handler and field agent keys for the recording; revoked afterwards.
 - [ ] Warm-up job run; kill switch off; deploys frozen (no `deploy.sh` or `terraform apply`).
-- [ ] Video recorded and edited to 3:00, uploaded publicly.
+- [ ] Video recorded and edited to about 3:30 (the rules allow 3 to 4 minutes), uploaded publicly, and its link added to the deck.
+- [ ] Brief description pasted from [`submission.md`](submission.md).
 - [ ] Deck on the official AI Builder Cup template: `docs/sideagent-submission.pptx` (editable, Google Sans Flex as in the template) and `docs/sideagent-submission.pdf` (rendered with Arial in place of Google Sans Flex, which this Mac lacks). Add the video link on the links slide and re-export the PDF; for the template's own font, open the .pptx in Google Slides and download the PDF from there.
 - [x] Repo public with the README's live URL; the live URL works for a new Google account (checked 2026-10-15: the repo is public, its README links `https://sideagent-hq.web.app`, and a first Google sign-in created an owner with 100 credits). Push the latest commits before submitting.
 - [ ] After judging: `terraform destroy`.

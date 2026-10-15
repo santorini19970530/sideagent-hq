@@ -69,6 +69,7 @@ Infrastructure is Terraform in [`infra/terraform/`](infra/terraform/README.md); 
 - [Technical plan](docs/technical.md): stack, components, cloud resources, data model, development setup and the must-have list.
 - [Phases](docs/phases.md): build order, each phase ending with a demo or test a person can review.
 - [Decisions](docs/decisions.md): what has been decided and why, including options that were rejected.
+- [Submission](docs/submission.md): links and the brief description for the submission form.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 
 ## Competition requirements
