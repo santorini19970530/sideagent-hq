@@ -3,7 +3,8 @@ import type { TimelineItem } from "@nuxt/ui";
 import type { JobEventView } from "@sideagent/protocol";
 import { collection, orderBy, query, type Timestamp } from "firebase/firestore";
 
-const props = defineProps<{ job: Job }>();
+/** `link` adds an "Open mission" button, for the map's side panel. */
+const props = defineProps<{ job: Job; link?: boolean }>();
 const { db } = useNuxtApp().$firebase;
 const { owner } = useOwner();
 
@@ -20,7 +21,6 @@ const log = computed<TimelineItem[]>(() =>
 
 const isPoster = computed(() => props.job.posterOwnerId === owner.value?.owner_id);
 const check = computed(() => props.job.lastCheck?.summary ?? null);
-const stakeHeld = computed(() => props.job.claim && STAKE_HELD_STATES.includes(props.job.state));
 const strength = computed(() => props.job.testStrength ?? null);
 const redacted = computed(() =>
   Object.entries(props.job.redactions ?? {})
@@ -32,7 +32,6 @@ const redacted = computed(() =>
 <template>
   <UCard
     as="aside"
-    class="max-h-[calc(100vh-190px)] overflow-y-auto"
     :ui="{ header: 'grid justify-items-start gap-2', body: 'grid content-start gap-4' }"
   >
     <template #header>
@@ -41,6 +40,16 @@ const redacted = computed(() =>
       </p>
       <h2 class="text-lg font-semibold text-highlighted">{{ job.title }}</h2>
       <StateBadge :tone="toneOf(job.state)" :label="STATE_LABELS[job.state]" />
+      <UButton
+        v-if="link"
+        :to="`/missions/${job.id}`"
+        size="sm"
+        color="neutral"
+        variant="outline"
+        trailing-icon="i-lucide-arrow-right"
+      >
+        Open mission
+      </UButton>
     </template>
 
     <dl
@@ -54,7 +63,7 @@ const redacted = computed(() =>
         <dt>Field agent</dt>
         <dd>{{ job.claim ? codename(job.claim.runnerAgentId) : "None yet" }}</dd>
       </div>
-      <div v-if="stakeHeld">
+      <div v-if="stakeHeld(job)">
         <dt>Stake held</dt>
         <dd>{{ job.claim?.stake }} cr</dd>
       </div>

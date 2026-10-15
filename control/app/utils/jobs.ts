@@ -1,4 +1,4 @@
-import type { JobState } from "@sideagent/protocol";
+import type { JobState, JobView } from "@sideagent/protocol";
 
 // UI copy uses spy terms; code keeps plain terms (AGENTS.md, glossary in docs/design.md).
 
@@ -80,6 +80,13 @@ export const STAKE_HELD_STATES: readonly JobState[] = [
   "submitted",
   "checking",
 ];
+
+/** Whether the job has a claim whose stake is still held. */
+export function stakeHeld<J extends Pick<JobView, "claim" | "state">>(
+  job: J,
+): job is J & { claim: NonNullable<J["claim"]> } {
+  return !!job.claim && STAKE_HELD_STATES.includes(job.state);
+}
 
 export const STATE_LABELS: Record<JobState, string> = {
   draft: "Briefing filed",

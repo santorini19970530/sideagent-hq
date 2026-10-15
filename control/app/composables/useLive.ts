@@ -20,6 +20,8 @@ function live<S, T>(
 ) {
   const data = shallowRef<T>(initial);
   const error = ref<string | null>(null);
+  /** False until the first snapshot or error for the current source, and while it is null. */
+  const ready = ref(false);
   let current: S | null = null;
   let stop: (() => void) | null = null;
   watch(
@@ -31,20 +33,25 @@ function live<S, T>(
       current = s;
       data.value = initial;
       error.value = null;
+      ready.value = false;
       if (s === null) return;
       stop = subscribe(
         s,
         (v) => {
           data.value = v;
           error.value = null;
+          ready.value = true;
         },
-        (e) => (error.value = e.message),
+        (e) => {
+          error.value = e.message;
+          ready.value = true;
+        },
       );
     },
     { immediate: true },
   );
   onScopeDispose(() => stop?.());
-  return { data, error };
+  return { data, error, ready };
 }
 
 /** Documents of a query, with their IDs. */

@@ -43,8 +43,10 @@ const columns: TableColumn<Job>[] = [
         empty="No missions yet."
       >
         <template #mission-cell="{ row }">
-          <span class="font-mono text-muted">#{{ codename(row.original.id) }}</span>
-          {{ row.original.title }}
+          <ULink :to="`/missions/${row.original.id}`" class="text-default hover:underline">
+            <span class="font-mono text-muted">#{{ codename(row.original.id) }}</span>
+            {{ row.original.title }}
+          </ULink>
         </template>
         <template #status-cell="{ row }">
           <StateBadge
@@ -60,7 +62,7 @@ const columns: TableColumn<Job>[] = [
         </template>
         <template #stake-cell="{ row }">
           <BalanceCell
-            v-if="row.original.claim && STAKE_HELD_STATES.includes(row.original.state)"
+            v-if="stakeHeld(row.original)"
             :account="accounts.stake(row.original.id, row.original.claim.runnerAgentId)"
           />
           <span v-else class="text-muted">—</span>

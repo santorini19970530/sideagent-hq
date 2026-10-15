@@ -274,3 +274,11 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** A reopened job isn't dispatched to a house runner again (D27), so something else has to finish it, and a laptop on an open model is the supply story of D1. Only `code.implement` in Python exists; a new job type this close to submission is the riskiest change left.
 
 **Trade-off:** The house runner dispatched when the sting opens can still win the reopened mission instead of Gemma if the double agent's check finishes before the house runner's claim; the honest result still passes, but by Gemini. The demo shows one job type.
+
+## D36. A mission page for its poster and runner only (2026-10-15)
+
+**Decision:** Mission control has a page per job, `/missions/{id}`, with the job's facts, mission log, credits and `feed` entries. Only the poster's owner and the claiming runner's owner can open it, the same `canSeeJob` check the Firestore rules already apply to jobs, events and balances. Anyone else, and a job that doesn't exist, sees the same "Eyes only" card. In the public counterintelligence feed, a job's codename links to the page only when the viewer is on that mission.
+
+**Why:** Ledger rows and feed entries need a place to link to, and the map's side panel had no URL. Job documents carry the poster's title, spec and screening reasons, which are untrusted and may be private, so a public page would break "no private data in public pages". Both parties see the page because the runner needs the mission it is working on, and the rules already allow it.
+
+**Rejected:** A public stub for missions the viewer isn't on, listing that job's feed entries. The feed already shows the same sanitized data, and a judge signed in with their own account would mostly see stubs.

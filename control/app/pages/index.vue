@@ -179,7 +179,13 @@ useResizeObserver(useTemplateRef("canvas"), fitTop);
           </template>
         </VueFlow>
       </UCard>
-      <JobTimeline v-if="selected" :key="selected.id" :job="selected" />
+      <JobTimeline
+        v-if="selected"
+        :key="selected.id"
+        :job="selected"
+        link
+        class="max-h-[calc(100vh-190px)] overflow-y-auto"
+      />
     </div>
   </div>
 </template>
