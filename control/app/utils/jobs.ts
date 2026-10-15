@@ -120,7 +120,4 @@ export function formatTime(date: Date, withDate = false): string {
   return withDate ? date.toLocaleString("en-GB") : date.toLocaleTimeString("en-GB");
 }
 
-/** Short, stable codename for an ID, e.g. for field agents. */
-export function codename(id: string): string {
-  return id.slice(-4).toUpperCase();
-}
+export { codename } from "@sideagent/protocol";

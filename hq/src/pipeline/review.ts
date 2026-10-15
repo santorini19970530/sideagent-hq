@@ -159,8 +159,8 @@ export function createReviewStep({
       u.move(
         "open",
         score == null
-          ? "Tests reviewed; open for claims"
-          : `Tests reviewed, strength ${score}%; open for claims`,
+          ? "Tests reviewed; open to field agents"
+          : `Tests reviewed, strength ${score}%; open to field agents`,
       );
       return true;
     });

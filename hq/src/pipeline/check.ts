@@ -57,7 +57,8 @@ export function createCheckStep({
 
     // Its own transaction first, so the dashboard shows the check while it runs.
     const started = await updateJob(db, jobId, new Date(), (u) => {
-      if (u.job.state === "submitted") u.move("checking", `Checking submission ${submissionId}`);
+      if (u.job.state === "submitted")
+        u.move("checking", "Checking the debrief against hidden tests");
       return u.job.state === "checking";
     });
     if (!started) return;
@@ -116,7 +117,7 @@ export function createCheckStep({
           kind: "result_blocked",
           agentId: u.job.claim?.runnerAgentId ?? null,
           categories: blockedCategories,
-          detail: "Result held at the checkpoint before it reached the poster",
+          detail: "Debrief held at the checkpoint before it reached the handler",
           createdAt: u.at,
         });
       }
@@ -157,7 +158,10 @@ function penalizeTrapFailure(
 ): void {
   const claim = u.job.claim;
   const burned = trapsFailed >= burnAfter;
-  u.move("open", burned ? "Trap check failed; runner burned" : "Trap check failed; stake slashed");
+  u.move(
+    "open",
+    burned ? "Caught by a sting; field agent burned" : "Caught by a sting; stake lost",
+  );
   if (claim) releaseStake(u, claim, claim.stake, "Stake slashed for a failed trap check");
   u.job.claim = null;
   recordTrapFailure(u.tx, runnerRef, trapsFailed, burned, u.at);
@@ -166,7 +170,7 @@ function penalizeTrapFailure(
       kind: "runner_burned",
       agentId: runnerRef.id,
       categories: ["trap_check"],
-      detail: "Double agent burned: failed a trap check and lost its stake",
+      detail: "Double agent burned: caught by a sting and lost its stake",
       createdAt: u.at,
     });
   }
@@ -176,18 +180,18 @@ function penalizeTrapFailure(
 function returnToRunnerOrReopen(u: JobUpdate): void {
   const claim = u.job.claim;
   if (claim && claim.attemptsLeft > 0) {
-    u.move("claimed", `Back to the runner; ${claim.attemptsLeft} attempts left`);
+    u.move("claimed", `Back to the field agent; ${claim.attemptsLeft} attempts left`);
     return;
   }
-  u.move("open", "No attempts left; open for claims");
+  u.move("open", "No attempts left; open to field agents");
   if (claim) releaseStake(u, claim, 0, "Claim ended without a pass");
   u.job.claim = null;
 }
 
 /** Event detail, readable by anyone who can see the job: counts only, never the reason. */
 function describe(outcome: CheckOutcome, summary: TestSummary | null): string {
-  if (!summary) return "Result rejected by the checker";
-  if (outcome === "blocked") return "Passed, but the result was blocked at the checkpoint";
-  if (outcome === "trap_failed") return "Failed a trap check";
+  if (!summary) return "Debrief rejected by the checker";
+  if (outcome === "blocked") return "Passed, but the debrief was held at the checkpoint";
+  if (outcome === "trap_failed") return "Caught by a sting";
   return `${outcome === "passed" ? "Passed" : "Failed"} ${summary.passed}/${summary.total} tests`;
 }

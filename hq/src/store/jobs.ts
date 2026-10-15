@@ -134,7 +134,9 @@ export function expireClaimIfDue(
   const slashed = Math.floor((claim.stake * slashPercent) / 100);
   u.move(
     "open",
-    slashed ? `Claim timed out; ${slashed} credits of stake slashed` : "Claim timed out",
+    slashed
+      ? `Field agent ran out of time; lost ${slashed} credits of stake`
+      : "Field agent ran out of time",
   );
   releaseStake(u, claim, slashed, "Claim timed out");
   u.job.claim = null;

@@ -144,6 +144,10 @@ describe("claim and submit", () => {
       "passed",
       "released",
     ]);
+    // The mission log names the field agent by codename, never its full ID.
+    expect(poster.events.find((e) => e.to === "claimed")?.detail).toMatch(
+      /^Field agent [A-Z0-9]{4} took the mission$/,
+    );
 
     const runner = JobStatus.parse((await h.call(keys.runner, "GET", `/v1/jobs/${jobId}`)).body);
     expect(runner.role).toBe("runner");

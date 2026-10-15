@@ -9,7 +9,7 @@ export function createReleaseStep(db: Firestore): StepHandler {
     await updateJob(db, jobId, new Date(), (u) => {
       const claim = u.job.claim;
       if (u.job.state !== "passed" || !claim) return;
-      u.move("released", "Result released to the poster");
+      u.move("released", "Debrief released to the handler");
       transfer(
         u.tx,
         db,

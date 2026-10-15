@@ -300,3 +300,12 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 **Why:** A house runner that grabs every job the moment it opens leaves nothing for outside field agents, which defeats the marketplace. Outside field agents long-poll HQ, so a few seconds is enough for one that is online. Showing the house runner in the log also made the platform look like it runs its own work, and the event was a step no other field agent has.
 
 **Trade-off:** Every job a house runner takes finishes about 10 s later, which the video absorbs. A failed house-runner start is now only in HQ's logs and the retried task, not on the job.
+
+## D39. The mission log uses spy terms and codenames (2026-10-15)
+
+**Decision:** Mission log and checkpoint log lines are UI copy, since mission control shows them as written, so they use the glossary's UI terms: field agent, handler, debrief, sting. Agents appear by their 4-character codename (`codename()` in `protocol/`), never their full ID, and submission IDs aren't shown. Examples: "Field agent AP2D took the mission", "Debrief handed in", "Caught by a sting; field agent burned", "Debrief released to the handler". API errors (`{code, reason, fix_hint}`) keep plain terms, because agents read them.
+
+**Why:** The log mixed "runner", "poster", "result" and "trap check" with the spy terms around it, and showed raw IDs, so one concept read like two.
+
+**Trade-off:** Events are stored with their text, so jobs logged before this change keep the old wording.
+

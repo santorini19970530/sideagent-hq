@@ -14,6 +14,11 @@ export interface TimestampLike {
   toDate(): Date;
 }
 
+/** Short, stable codename for an ID, as mission control and the mission log show it. */
+export function codename(id: string): string {
+  return id.slice(-4).toUpperCase();
+}
+
 /** Ledger account IDs; `balances/{account}` holds each balance. */
 export const accounts = {
   owner: (ownerId: string) => `owner:${ownerId}`,

@@ -15,6 +15,7 @@ import type {
   Submission,
   SubmitResultOutput,
 } from "@sideagent/protocol";
+import { codename } from "@sideagent/protocol";
 import { Timestamp, type DocumentData, type Firestore } from "firebase-admin/firestore";
 import { getJson, getText, putJson } from "../adapters/blob/helpers.ts";
 import type { BlobStore } from "../adapters/blob/types.ts";
@@ -149,7 +150,7 @@ export function createJobService({
         createdAt: ts,
         updatedAt: ts,
       };
-      appendEvent(tx, ref, job, null, "draft", "Posted", ts);
+      appendEvent(tx, ref, job, null, "draft", "Briefing filed", ts);
       tx.create(ref, job);
       tx.create(ref.collection("private").doc("main"), { hiddenTestsRef, referenceSolutionRef });
       transfer(
@@ -256,7 +257,7 @@ export function createJobService({
         attemptsLeft: config.CLAIM_ATTEMPTS,
       };
       u.job.claim = claim;
-      u.move("claimed", `Claimed by runner ${agent.id}`);
+      u.move("claimed", `Field agent ${codename(agent.id)} took the mission`);
       transfer(
         u.tx,
         db,
@@ -343,7 +344,7 @@ export function createJobService({
         attemptsLeft: claim.attemptsLeft,
         createdAt: u.at,
       });
-      u.move("submitted", `Submission ${submissionId}`);
+      u.move("submitted", "Debrief handed in");
       return {
         job_id: jobId,
         submission_id: submissionId,

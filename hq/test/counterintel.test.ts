@@ -267,7 +267,7 @@ describe("test review", () => {
     expect(s?.state).toBe("open");
     expect(s?.test_strength).toBe(90);
     expect(s?.test_fix_hint).toBeUndefined();
-    expect(s?.events.at(-1)?.detail).toBe("Tests reviewed, strength 90%; open for claims");
+    expect(s?.events.at(-1)?.detail).toBe("Tests reviewed, strength 90%; open to field agents");
     const review = h.sandbox.bundles.find((b) => b.jobId === jobId && b.checkId === "review");
     expect(review?.mutants).toEqual({
       limit: h.config.LIMIT_MUTANTS,
@@ -313,8 +313,8 @@ describe("trap checks", () => {
       "public",
     ]);
     expect(poster.events.map((e) => e.detail).slice(-2)).toEqual([
-      "Failed a trap check",
-      "Trap check failed; runner burned",
+      "Caught by a sting",
+      "Caught by a sting; field agent burned",
     ]);
     // The whole stake (2) goes to fees, and the key stops working. Other tests share the fees
     // account, so read this job's ledger entries.
