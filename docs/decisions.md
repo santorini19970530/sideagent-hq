@@ -279,7 +279,7 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 ## D36. A mission page for its poster and runner only (2026-10-15)
 
-**Decision:** Mission control has a page per job, `/missions/{id}`, with the job's facts, mission log, credits and `feed` entries. Only the poster's owner and the claiming runner's owner can open it, the same `canSeeJob` check the Firestore rules already apply to jobs, events and balances. Anyone else, and a job that doesn't exist, sees the same "Eyes only" card. In the public checkpoint log, a job's codename links to the page only when the viewer is on that mission.
+**Decision:** Mission control has a page per job, `/missions/{id}`, with the job's facts, mission log, credits and `feed` entries. Only the poster's owner and the claiming runner's owner can open it, the same `canSeeJob` check the Firestore rules already apply to jobs, events and balances. Anyone else, and a job that doesn't exist, sees the same "Classified" card. In the public checkpoint log, a job's codename links to the page only when the viewer is on that mission.
 
 **Why:** Ledger rows and feed entries need a place to link to, and the map's side panel had no URL. Job documents carry the poster's title, spec and screening reasons, which are untrusted and may be private, so a public page would break "no private data in public pages". Both parties see the page because the runner needs the mission it is working on, and the rules already allow it.
 
@@ -309,3 +309,4 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Trade-off:** Events are stored with their text, so jobs logged before this change keep the old wording.
 
+**Amended:** mission control follows the same rule. Each spy word has one meaning: "Eyes only" is for hidden tests and redacted values, so a new key is "Shown once" and a mission you can't open is "Classified"; "Burned" is only for a caught double agent, so a key you revoke is "Revoked". The key page is "Keys" in the nav, since it holds handler keys too, the public feed page is titled "Checkpoint log" (a station is a private board), and the about page is "About" rather than "Briefing", which means a job's spec.

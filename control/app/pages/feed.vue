@@ -18,7 +18,7 @@ const mine = computed(() => new Set(jobs.value.map((job) => job.id)));
   <div class="grid max-w-5xl gap-4">
     <UPageHeader
       headline="Checkpoint · live"
-      title="Station log"
+      title="Checkpoint log"
       description="Every briefing is screened before a field agent sees it, private data is swapped for placeholders, and every debrief faces hidden tests and stings. What the checkpoint caught, as it happens."
     />
 

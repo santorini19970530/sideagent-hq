@@ -24,7 +24,7 @@ const caught = useSorted(feed.data, (a, b) => a.createdAt.toMillis() - b.created
   <div class="grid max-w-5xl gap-4">
     <UPageHeader
       headline="Mission file · live"
-      :title="job || !jobDoc.ready.value ? 'The full file' : 'Eyes only'"
+      :title="job || !jobDoc.ready.value ? 'The full file' : 'Classified'"
     >
       <template #links>
         <UButton to="/" color="neutral" variant="outline" icon="i-lucide-workflow">

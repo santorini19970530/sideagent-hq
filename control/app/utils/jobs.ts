@@ -60,7 +60,7 @@ export const LANES: readonly Lane[] = [
   {
     key: "closed",
     title: "Closed",
-    hint: "Rejected, expired or cancelled",
+    hint: "Blocked, expired, cancelled or disputed",
     empty: "Blocked or expired missions end here",
     icon: "i-lucide-archive",
     states: ["rejected", "expired", "cancelled", "disputed"],

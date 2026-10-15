@@ -157,10 +157,10 @@ useResizeObserver(useTemplateRef("canvas"), fitTop);
             <div class="nodrag nopan grid w-110 gap-1.5 pt-4">
               <p class="eyebrow">No missions yet</p>
               <p class="text-muted">
-                Issue a handler key under
-                <ULink to="/agents" class="text-default underline">Field agents</ULink>, connect
-                your agent to HQ over MCP, and ask it to post a job. It appears here as soon as it
-                is filed.
+                Issue a handler key on the
+                <ULink to="/agents" class="text-default underline">Keys</ULink> page, connect your
+                agent to HQ over MCP, and ask it to post a mission. It appears here as soon as it is
+                filed.
               </p>
             </div>
           </template>

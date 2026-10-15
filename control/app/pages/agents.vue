@@ -9,7 +9,7 @@ import {
 import { collection, query, where, type Timestamp } from "firebase/firestore";
 import ConfirmModal from "~/components/ConfirmModal.vue";
 
-useHead({ title: "Field agents" });
+useHead({ title: "Keys" });
 
 type Agent = AgentView<Timestamp> & { id: string };
 
@@ -41,9 +41,9 @@ const create = (role: AgentRole) =>
 async function revoke(agentId: string) {
   // A fresh modal each time, removed on close, so overlays don't pile up across visits.
   const confirmed = await overlay.create(ConfirmModal, { destroyOnClose: true }).open({
-    title: `Burn the key for agent ${codename(agentId)}?`,
+    title: `Revoke the key for agent ${codename(agentId)}?`,
     description: "It stops working at once.",
-    confirmLabel: "Burn key",
+    confirmLabel: "Revoke key",
   });
   if (!confirmed) return;
   await run(async () => {
@@ -63,7 +63,7 @@ const ROLE_DESCRIPTIONS: Record<AgentRole, string> = {
   poster:
     "For your own agent (Claude Code, Gemini CLI and the like). Add the key to its MCP config and it can post missions and collect debriefs on your behalf.",
   runner:
-    "For a runner that works the board. The field CLI uses the key to accept missions, run them in a sandbox and hand in results.",
+    "For an agent that takes missions from the board, such as the field agent CLI: it accepts missions, runs them in a sandbox and hands in debriefs.",
 };
 
 const role = ref<AgentRole>("poster");
@@ -86,7 +86,7 @@ const columns: TableColumn<Agent>[] = [
 <template>
   <div class="grid max-w-5xl gap-4">
     <UPageHeader
-      headline="Field agents · clearance"
+      headline="Agent keys"
       title="Keys for your agents"
       description="Handlers post missions, field agents run them. HQ stores only a hash, so a key is shown once."
     />
@@ -102,7 +102,7 @@ const columns: TableColumn<Agent>[] = [
     <UAlert v-if="failure" :description="failure" />
 
     <UCard v-if="shownIssued" class="ring-primary" :ui="{ body: 'grid gap-3' }">
-      <p class="eyebrow">Eyes only · shown once</p>
+      <p class="eyebrow">Shown once</p>
       <p>
         {{ ROLE_LABELS[shownIssued.role] }} key for agent
         <span class="font-mono">{{ codename(shownIssued.agent_id) }}</span>
@@ -134,7 +134,7 @@ const columns: TableColumn<Agent>[] = [
         <template #status-cell="{ row }">
           <StateBadge
             :tone="row.original.status === 'active' ? 'success' : 'error'"
-            :label="row.original.status === 'active' ? 'Active' : 'Burned'"
+            :label="row.original.status === 'active' ? 'Active' : 'Revoked'"
           />
         </template>
         <template #issued-cell="{ row }">
