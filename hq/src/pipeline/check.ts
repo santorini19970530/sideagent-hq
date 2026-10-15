@@ -116,7 +116,7 @@ export function createCheckStep({
           kind: "result_blocked",
           agentId: u.job.claim?.runnerAgentId ?? null,
           categories: blockedCategories,
-          detail: "Result held back by counterintelligence before it reached the poster",
+          detail: "Result held at the checkpoint before it reached the poster",
           createdAt: u.at,
         });
       }
@@ -187,7 +187,7 @@ function returnToRunnerOrReopen(u: JobUpdate): void {
 /** Event detail, readable by anyone who can see the job: counts only, never the reason. */
 function describe(outcome: CheckOutcome, summary: TestSummary | null): string {
   if (!summary) return "Result rejected by the checker";
-  if (outcome === "blocked") return "Passed, but the result was blocked by counterintelligence";
+  if (outcome === "blocked") return "Passed, but the result was blocked at the checkpoint";
   if (outcome === "trap_failed") return "Failed a trap check";
   return `${outcome === "passed" ? "Passed" : "Failed"} ${summary.passed}/${summary.total} tests`;
 }

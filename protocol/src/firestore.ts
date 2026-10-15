@@ -121,7 +121,7 @@ export type FeedKind =
   "job_blocked" | "job_rejected" | "redacted" | "result_blocked" | "runner_burned";
 
 /**
- * `feed/{id}`, public: counterintelligence events for mission control. Text comes from fixed
+ * `feed/{id}`, public: checkpoint events for mission control. Text comes from fixed
  * templates and counts, never from job content or a model's prose.
  */
 export interface FeedView<T extends TimestampLike = TimestampLike> {

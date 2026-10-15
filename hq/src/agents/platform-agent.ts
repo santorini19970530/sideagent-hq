@@ -96,7 +96,6 @@ function finalVerdict(answer: ScreeningVerdict): FinalVerdict {
   const { verdict, ...rest } = answer;
   if (verdict !== "escalate") return { ...rest, verdict };
   const fix_hint =
-    rest.fix_hint ||
-    "Counterintelligence could not clear this; make the task plainer and post again";
+    rest.fix_hint || "The checkpoint could not clear this; make the task plainer and post again";
   return { ...rest, verdict: "block", fix_hint };
 }

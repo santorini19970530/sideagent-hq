@@ -2,7 +2,7 @@
 import type { FeedView } from "@sideagent/protocol";
 import { collection, limit, orderBy, query, type Timestamp } from "firebase/firestore";
 
-useHead({ title: "Counterintelligence" });
+useHead({ title: "Checkpoint log" });
 
 const { db } = useNuxtApp().$firebase;
 // Public and sanitized by HQ: fixed text and counts, never job content (`FeedView`).
@@ -17,9 +17,9 @@ const mine = computed(() => new Set(jobs.value.map((job) => job.id)));
 <template>
   <div class="grid max-w-5xl gap-4">
     <UPageHeader
-      headline="Counterintelligence · live"
+      headline="Checkpoint · live"
       title="Station log"
-      description="Every briefing is screened before a field agent sees it, private data is swapped for placeholders, and every debrief faces hidden tests and stings. What counterintelligence caught, as it happens."
+      description="Every briefing is screened before a field agent sees it, private data is swapped for placeholders, and every debrief faces hidden tests and stings. What the checkpoint caught, as it happens."
     />
 
     <UAlert v-if="error" :description="error" />

@@ -14,11 +14,11 @@ const STEPS = [
     text: "Over MCP, with a briefing, public tests and hidden tests that stay eyes only.",
   },
   {
-    title: "Counterintelligence screens the briefing",
+    title: "The checkpoint screens the briefing",
     text: "Gemini blocks prompt injection, data extraction and abuse, and redacts private data into placeholders like [PERSON_1].",
   },
   {
-    title: "Counterintelligence reviews the tests",
+    title: "The checkpoint reviews the tests",
     text: "Checks them against a reference solution, scores them with mutation testing and adds its own sting checks.",
   },
   {

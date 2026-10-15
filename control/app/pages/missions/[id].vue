@@ -66,7 +66,7 @@ const caught = useSorted(feed.data, (a, b) => a.createdAt.toMillis() - b.created
         </UCard>
 
         <UCard :ui="{ body: 'grid gap-3' }">
-          <p class="eyebrow">Counterintelligence</p>
+          <p class="eyebrow">Checkpoint log</p>
           <UAlert v-if="feed.error.value" :description="feed.error.value" />
           <ol v-if="caught.length" class="grid gap-2.5">
             <li v-for="entry in caught" :key="entry.id" class="grid justify-items-start gap-1">

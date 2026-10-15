@@ -41,8 +41,7 @@ export function createScreenStep({
   return async ({ jobId }) => {
     // Its own transaction first, so the dashboard shows screening while the model runs.
     const started = await updateJob(db, jobId, new Date(), (u) => {
-      if (u.job.state === "draft")
-        u.move("screening", "Counterintelligence screening the briefing");
+      if (u.job.state === "draft") u.move("screening", "Screening the briefing at the checkpoint");
       return u.job.state === "screening";
     });
     if (!started) return;
@@ -109,16 +108,16 @@ export function createScreenStep({
       }
       takeScreeningFee(u);
       if (verdict.verdict === "allow") {
-        u.move("test_review", "Briefing cleared by counterintelligence");
+        u.move("test_review", "Briefing cleared the checkpoint");
         return true;
       }
       u.job.rejection = apiError(
         "job_blocked",
-        verdict.reason || "Counterintelligence blocked this job",
+        verdict.reason || "The checkpoint blocked this job",
         verdict.fix_hint || "Remove the flagged content and post the job again",
       );
       const categories = verdict.categories.join(", ") || "unspecified";
-      u.move("rejected", `Blocked by counterintelligence: ${categories}`);
+      u.move("rejected", `Blocked at the checkpoint: ${categories}`);
       refundBudget(u, "Budget refunded; job blocked by screening");
       addFeed(u.tx, u.ref, {
         kind: "job_blocked",

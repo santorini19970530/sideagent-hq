@@ -21,7 +21,7 @@ Before starting any task, read:
 
 ## Naming rules
 
-- **Spy-agency terms are for the UI, the deck and the video only:** mission, handler, field agent, briefing, debrief, eyes only, dead drop, sting, double agent, burned, clearance, station, counterintelligence, mission control.
+- **Spy-agency terms are for the UI, the deck and the video only:** mission, handler, field agent, briefing, debrief, eyes only, dead drop, sting, double agent, burned, clearance, station, checkpoint, mission control.
 - **Code, APIs, schemas and MCP tools use plain terms:** job, poster, runner, spec, result, hidden tests, escrow, trap job, reputation, board. The mapping is in the glossary in `docs/design.md`.
 - Keep the theme generic spy. No "007", James Bond names, imagery or music.
 - Product name is `Sideagent` (one word, singular). Package and CLI name: `sideagent`.

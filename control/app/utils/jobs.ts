@@ -19,7 +19,7 @@ export interface Lane {
 export const LANES: readonly Lane[] = [
   {
     key: "screening",
-    title: "Counterintelligence",
+    title: "Checkpoint",
     hint: "Briefing screened",
     empty: "Briefings are screened here",
     icon: "i-lucide-scan-eye",

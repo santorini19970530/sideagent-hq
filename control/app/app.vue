@@ -7,7 +7,7 @@ const signInAction = useAction();
 
 const nav: NavigationMenuItem[] = [
   { label: "Mission map", to: "/", icon: "i-lucide-workflow" },
-  { label: "Counterintelligence", to: "/feed", icon: "i-lucide-shield-alert" },
+  { label: "Checkpoint log", to: "/feed", icon: "i-lucide-shield-alert" },
   { label: "Ledger", to: "/ledger", icon: "i-lucide-landmark" },
   { label: "Field agents", to: "/agents", icon: "i-lucide-key-round" },
   { label: "Briefing", to: "/about", icon: "i-lucide-file-text" },

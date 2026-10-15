@@ -16,7 +16,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 | 2b | Gemma field agent with Docker sandbox | B | 2 | Local | Recording: the same job solved by Gemma with no network |
 | 3 | Real checks and escrow | A | 2 | Local | Demo + tests: correct answer paid, wrong answer withheld; sandbox has no network |
 | 4 | Mission control v1 | B | 3 | Local | Demo: a job moving live in the dashboard, with a local house runner finishing it |
-| 5 | Counterintelligence | A (B: feed) | 3–4 | Local + model APIs | Demo: malicious job blocked, private data redacted, double agent burned |
+| 5 | Checkpoint | A (B: feed) | 3–4 | Local + model APIs | Demo: malicious job blocked, private data redacted, double agent burned |
 | 6 | Test review | A | 4 | Local | Demo: weak tests get a low strength score and a fix hint |
 | 7 | Deploy to GCP | A+B | 4 PM | GCP | Demo: Gemini CLI posts to live HQ; a dispatched house runner finishes; nothing runs when idle |
 | 8 | Demo hardening and submission | A+B | 5 | GCP | Final video, deck PDF, frozen deploys |
@@ -122,7 +122,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 **Tests**
 - Firestore rules tests against the emulator: clients can't write, and can't read `private`, `vault`, `ledger` or `submissions`.
 
-## Phase 5: Counterintelligence
+## Phase 5: Checkpoint
 
 **Scope**
 - Screener (jobs) and result-screener (results) agents with triage then escalation, calling Gemini on Vertex AI from the laptop.
@@ -136,7 +136,7 @@ Person **A** owns HQ and the trust layer. Person **B** owns the field CLI, dashb
 2. A job containing an email and an account number reaches the runner as `[EMAIL_1]` and `[ACCT_1]`; the poster gets real values back.
 3. The double agent fails a trap check, is burned and loses its stake.
 
-- Done locally (2026-10-15) with `pnpm demo:counterintel` against Gemini on Vertex AI and the Docker sandbox: the `.env` job was rejected in 1.6 s with a fix hint and a feed entry; the private-data job reached the runner as `[EMAIL_1]` and `[ACCT_1]` and the poster got the real values back; the double agent's lookup table of the public answers failed the trap checks (D29), lost its stake and was burned. The script plays the double agent with the same code as `SIDEAGENT_SIMULATE_CHEAT=1`; with `HOUSE_RUNNER_DOUBLE_AGENT=1` HQ dispatches it as a house runner instead. Results under "Counterintelligence checks" in `technical.md`.
+- Done locally (2026-10-15) with `pnpm demo:counterintel` against Gemini on Vertex AI and the Docker sandbox: the `.env` job was rejected in 1.6 s with a fix hint and a feed entry; the private-data job reached the runner as `[EMAIL_1]` and `[ACCT_1]` and the poster got the real values back; the double agent's lookup table of the public answers failed the trap checks (D29), lost its stake and was burned. The script plays the double agent with the same code as `SIDEAGENT_SIMULATE_CHEAT=1`; with `HOUSE_RUNNER_DOUBLE_AGENT=1` HQ dispatches it as a house runner instead. Results under "Checkpoint results" in `technical.md`.
 - Also done: the first part of Phase 6 test review (the reference solution must pass its tests), because trap checks need it. `REDACTOR_BACKEND=dlp` (Sensitive Data Protection) and the Cloud KMS vault came with Phase 7.
 
 **Tests**

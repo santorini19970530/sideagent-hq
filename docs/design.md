@@ -29,7 +29,7 @@ Code uses the plain term. UI, deck and video use the spy term. **Decided.**
 | result | debrief | What the runner submits |
 | hidden tests | eyes only | Tests the runner never sees |
 | escrow | dead drop | Platform holds the result and credits until checks pass |
-| platform agents | counterintelligence | Screening, test review and judging agents |
+| platform agents | checkpoint | Screening, test review and judging agents |
 | trap job / trap check | sting | Job or test with a known answer, used to catch cheating |
 | cheating runner | double agent | Runner that submits fake or wrong results on purpose |
 | ban + stake slashed | burned | Penalty for a caught cheater |

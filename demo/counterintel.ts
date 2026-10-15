@@ -1,4 +1,4 @@
-// Phase 5 review demo: counterintelligence. Posts the three jobs in demo/jobs/counterintel.ts:
+// Phase 5 review demo: the checkpoint. Posts the three jobs in demo/jobs/counterintel.ts:
 // 1. a job that reads the runner's .env is blocked, with a fix hint;
 // 2. a job with an email and an account number reaches the runner as placeholders, and the
 //    poster gets the real values back;

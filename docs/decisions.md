@@ -277,8 +277,16 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 ## D36. A mission page for its poster and runner only (2026-10-15)
 
-**Decision:** Mission control has a page per job, `/missions/{id}`, with the job's facts, mission log, credits and `feed` entries. Only the poster's owner and the claiming runner's owner can open it, the same `canSeeJob` check the Firestore rules already apply to jobs, events and balances. Anyone else, and a job that doesn't exist, sees the same "Eyes only" card. In the public counterintelligence feed, a job's codename links to the page only when the viewer is on that mission.
+**Decision:** Mission control has a page per job, `/missions/{id}`, with the job's facts, mission log, credits and `feed` entries. Only the poster's owner and the claiming runner's owner can open it, the same `canSeeJob` check the Firestore rules already apply to jobs, events and balances. Anyone else, and a job that doesn't exist, sees the same "Eyes only" card. In the public checkpoint log, a job's codename links to the page only when the viewer is on that mission.
 
 **Why:** Ledger rows and feed entries need a place to link to, and the map's side panel had no URL. Job documents carry the poster's title, spec and screening reasons, which are untrusted and may be private, so a public page would break "no private data in public pages". Both parties see the page because the runner needs the mission it is working on, and the rules already allow it.
 
 **Rejected:** A public stub for missions the viewer isn't on, listing that job's feed entries. The feed already shows the same sanitized data, and a judge signed in with their own account would mostly see stubs.
+
+## D37. "Checkpoint" replaces "counterintelligence" in the UI (2026-10-15)
+
+**Decision:** The trust layer that screens briefings, reviews tests and checks debriefs is called the checkpoint in mission control, the README, the deck and the video. The mission map's first lane is "Checkpoint", the public feed page is the "Checkpoint log", and HQ's mission log lines say "Blocked at the checkpoint" and "Briefing cleared the checkpoint". Code names (`feed`, `screen`, `demo:counterintel`) don't change.
+
+**Why:** "Counterintelligence" is long and doesn't say what it does at first glance. A checkpoint is where things are inspected before they pass, which is exactly the job, and it still fits the spy theme.
+
+**Trade-off:** The submission deck (PDF and PPTX) still says "Counterintelligence" until it is regenerated.
