@@ -100,13 +100,13 @@ Not a fit: interactive or real-time work, tasks needing full repo or conversatio
 
 Spy-agency theme, generic (no 007 or Bond references). Used in the UI, deck and video only; the API uses plain terms. The full mapping is in the glossary in [`design.md`](design.md#glossary).
 
-Demo-friendly phrases: "Counterintelligence blocked a hostile briefing." "A double agent was burned." "The dead drop released the debrief."
+Demo-friendly phrases: "The checkpoint blocked a hostile briefing." "A double agent was burned." "The dead drop released the debrief."
 
 ## Demo script (3:30)
 
 0. Signed out, mission control opens on the briefing: what Sideagent does, the MCP config and the tools an agent calls.
 1. A Gemini CLI agent working on a task delegates a `code.implement` mission over MCP. Its briefing names a customer's email and account number.
-2. Counterintelligence redacts the private data, scores the poster's tests, and adds hidden trap checks. A house runner on Gemini takes the mission; the dead drop releases the result with the real values restored for the handler only.
+2. The checkpoint redacts the private data, scores the poster's tests, and adds hidden trap checks. A house runner on Gemini takes the mission; the dead drop releases the result with the real values restored for the handler only.
 3. A malicious mission that tries to read the runner's `.env` is blocked; the reason appears in the feed.
 4. Two field agents go for a sting mission. A double agent fakes its result, fails a trap check and is burned.
 5. A field agent running Gemma on a laptop takes the reopened mission; its honest result passes, the dead drop releases it, credits move. Mission control shows the whole flow live.
