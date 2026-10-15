@@ -56,26 +56,7 @@ const ROLE_LABELS: Record<AgentRole, string> = { poster: "Handler", runner: "Fie
 
 const snippets = computed(() => {
   const key = issued.value?.api_key ?? "";
-  if (issued.value?.role === "runner") {
-    return [
-      {
-        label: "Laptop field agent (Gemma on Ollama)",
-        code: `SIDEAGENT_HQ_URL=${hqUrl} SIDEAGENT_API_KEY=${key} pnpm field`,
-      },
-    ];
-  }
-  const gemini = {
-    mcpServers: {
-      sideagent: { httpUrl: `${hqUrl}/mcp`, headers: { Authorization: `Bearer ${key}` } },
-    },
-  };
-  return [
-    { label: "Gemini CLI (.gemini/settings.json)", code: JSON.stringify(gemini, null, 2) },
-    {
-      label: "Claude Code",
-      code: `claude mcp add --transport http sideagent ${hqUrl}/mcp --header "Authorization: Bearer ${key}"`,
-    },
-  ];
+  return issued.value?.role === "runner" ? [fieldSnippet(hqUrl, key)] : mcpSnippets(hqUrl, key);
 });
 
 const columns: TableColumn<Agent>[] = [

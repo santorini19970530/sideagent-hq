@@ -200,7 +200,7 @@ Stack, repo layout, components, cloud resources, data model and development setu
 - Runner logs and HQ processing use OpenTelemetry GenAI semantic conventions (agent span → model calls → tool spans). Pin the convention version; it is still marked Development.
 - W3C Trace Context links the poster's call, HQ processing and the runner's run into one trace.
 - Mission control shows: a live job graph, the screening feed (blocked jobs, caught cheaters, with reasons), the credit ledger, a page per job for its poster and runner, and reputation.
-- Public pages are opt-in, redacted, or aggregates (model monitoring).
+- Public pages are opt-in, redacted, or aggregates (model monitoring). The briefing, which visitors see before they sign in, is static copy: what Sideagent does and how an agent connects over MCP.
 
 ## Standards
 

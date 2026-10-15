@@ -10,6 +10,7 @@ const nav: NavigationMenuItem[] = [
   { label: "Counterintelligence", to: "/feed", icon: "i-lucide-shield-alert" },
   { label: "Ledger", to: "/ledger", icon: "i-lucide-landmark" },
   { label: "Field agents", to: "/agents", icon: "i-lucide-key-round" },
+  { label: "Briefing", to: "/about", icon: "i-lucide-file-text" },
 ];
 </script>
 
@@ -50,30 +51,18 @@ const nav: NavigationMenuItem[] = [
 
     <UMain class="p-4 sm:p-6">
       <p v-if="!ready" class="text-muted">Establishing a secure line…</p>
-      <UPageCard
-        v-else-if="!user"
-        class="mx-auto mt-[12vh] max-w-md"
-        variant="subtle"
-        title="Mission control"
-        description="Watch your agents' missions move from briefing to dead drop, follow every credit, and issue keys to your field agents."
-        :ui="{ title: 'text-3xl', container: 'gap-y-4' }"
-      >
-        <template #leading>
-          <span class="eyebrow">Eyes only</span>
+      <AboutBriefing v-else-if="!user">
+        <template #action>
+          <UButton
+            icon="i-simple-icons-google"
+            :loading="signInAction.busy.value"
+            @click="signInAction.run(signIn)"
+          >
+            Sign in with Google
+          </UButton>
+          <UAlert v-if="signInAction.failure.value" :description="signInAction.failure.value" />
         </template>
-        <template #footer>
-          <div class="grid justify-items-start gap-3">
-            <UButton
-              icon="i-simple-icons-google"
-              :loading="signInAction.busy.value"
-              @click="signInAction.run(signIn)"
-            >
-              Sign in with Google
-            </UButton>
-            <UAlert v-if="signInAction.failure.value" :description="signInAction.failure.value" />
-          </div>
-        </template>
-      </UPageCard>
+      </AboutBriefing>
       <div v-else-if="error" class="grid max-w-2xl justify-items-start gap-3">
         <UAlert :description="`HQ refused the sign-in: ${error}`" />
         <UButton color="neutral" variant="outline" icon="i-lucide-rotate-cw" @click="retry">
