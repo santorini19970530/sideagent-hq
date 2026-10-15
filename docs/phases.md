@@ -206,6 +206,6 @@ Starts by day 4 at 3pm at the latest.
 - [ ] Fresh handler and field agent keys for the recording; revoked afterwards.
 - [ ] Warm-up job run; kill switch off; deploys frozen (no `deploy.sh` or `terraform apply`).
 - [ ] Video recorded and edited to 3:00, uploaded publicly.
-- [x] Deck exported to PDF: `docs/sideagent-deck.pdf` (13 slides, printed from the Slides artifact's pages with headless Chrome).
+- [ ] Deck on the official AI Builder Cup template: `docs/sideagent-submission.pptx` (editable, Google Sans Flex as in the template) and `docs/sideagent-submission.pdf` (rendered with Arial in place of Google Sans Flex, which this Mac lacks). Add the video link on the links slide and re-export the PDF; for the template's own font, open the .pptx in Google Slides and download the PDF from there.
 - [x] Repo public with the README's live URL; the live URL works for a new Google account (checked 2026-10-15: the repo is public, its README links `https://sideagent-hq.web.app`, and a first Google sign-in created an owner with 100 credits). Push the latest commits before submitting.
 - [ ] After judging: `terraform destroy`.
