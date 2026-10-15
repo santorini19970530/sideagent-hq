@@ -202,7 +202,7 @@ Starts by day 4 at 3pm at the latest.
 - Started (2026-10-15): `demo/run-demo.ts` (`pnpm demo:run`) drives the video's beats against production with a handler key from mission control: the private-data job solved by a house runner and released with real values, the `.env` job blocked, the double agent burned on the sting, then the laptop Gemma field agent finishing the reopened sting (D35). Gemini CLI posts the first mission from `demo/gemini-prompt.md` and the script follows it. The shot list and narration are in `demo/video.md`. The deck is a Slides artifact built from `proposal.md`, exported to PDF from its share menu. The demo script in `proposal.md` drops the `data.extract` fan-out to the roadmap (D35).
 
 **Submission checklist**
-- [x] Two clean rehearsals of `pnpm demo:run` against production (270 s and 268 s; `demo/video.md`).
+- [x] Two clean rehearsals of `pnpm demo:run` against production (270 s and 268 s), and one of the full flow with Gemini CLI posting the first mission (243 s after the handoff; `demo/video.md`).
 - [ ] Fresh handler and field agent keys for the recording; revoked afterwards.
 - [ ] Warm-up job run; kill switch off; deploys frozen (no `deploy.sh` or `terraform apply`).
 - [ ] Video recorded and edited to 3:00, uploaded publicly.
