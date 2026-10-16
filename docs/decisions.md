@@ -291,7 +291,7 @@ Settled decisions and why. Agents: do not reopen these unless the user asks. Add
 
 **Why:** "Counterintelligence" is long and doesn't say what it does at first glance. A checkpoint is where things are inspected before they pass, which is exactly the job, and it still fits the spy theme.
 
-**Trade-off:** The submission deck (PDF and PPTX) still says "Counterintelligence" until it is regenerated.
+**Trade-off:** The submission deck had to be re-exported to match; it says "checkpoint" as of 2026-10-17.
 
 ## D38. House runners wait a few seconds and stay out of the mission log (2026-10-15)
 

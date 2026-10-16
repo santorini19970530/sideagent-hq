@@ -7,7 +7,7 @@ Text and links for the AI Builder Cup submission form. Checklist in [`phases.md`
 - Deployed prototype: https://sideagent-hq.web.app
 - GitHub repository: https://github.com/williamchong/sideagent-hq
 - Pitch deck: [`sideagent-submission.pdf`](sideagent-submission.pdf), on the official template
-- Demo video (3 to 4 minutes): add the YouTube link once it is uploaded
+- Demo video (3 to 4 minutes): https://youtu.be/xrFyhqM0Ykk
 
 ## Brief description
 
